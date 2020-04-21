@@ -1,6 +1,6 @@
 # hdhr-disk-space-monitor
 Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device. Optionally delete recordings to stay above a specified free space threshold.
-
+```
 usage: hdhr_monitor_disk_space.py [-h] [-d DEVICE_ID] [-m {report,maintain}]
                                   [-s {age,category,priority}] [-i SECONDS]
                                   [-l] [-g GIGABYTES | -p PERCENT] [-q | -v]
@@ -54,3 +54,4 @@ optional arguments:
   -q, --quiet           Suppress all messages except errors.
   -v, --verbose         Print more informational messages. Free space and
                         delete messages are printed by default.
+```
