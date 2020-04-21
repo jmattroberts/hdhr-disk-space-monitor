@@ -378,7 +378,7 @@ def report_space_utilization(device):
             print("; Minimum Free: " + str(round(min_free_gib, 2)) + 
               " GiB (" + str(round(min_free_pct, 1)) + "%)")
         else:
-            print(')')
+            print('')
 
     # End not quiet if
 
