@@ -1,0 +1,13 @@
+[Unit]
+Description=HDHomeRun Disk Space Monitor for Device ID %I
+Wants=network-online.target
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+ExecStart=/usr/local/bin/hdhr_monitor_disk_space.py --mode maintain --device %I
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
