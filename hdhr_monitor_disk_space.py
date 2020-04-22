@@ -67,7 +67,7 @@ def percent(string):
     value = float(string)
 
     if (value <= 0) or (value >= 100):
-        msg = "%r (must be between 0 and 100, non-inclusive)" % string
+        msg = '%r (must be between 0 and 100, non-inclusive)' % string
         raise argparse.ArgumentTypeError(msg)
 
     return value
@@ -80,7 +80,7 @@ def positive_float(string):
     value = float(string)
 
     if (value <= 0):
-        msg = "%r (must be greater than 0)" % string
+        msg = '%r (must be greater than 0)' % string
         raise argparse.ArgumentTypeError(msg)
 
     return value
@@ -93,7 +93,7 @@ def positive_int(string):
     value = int(string)
 
     if (value <= 0):
-        msg = "%r (must be greater than 0)" % string
+        msg = '%r (must be greater than 0)' % string
         raise argparse.ArgumentTypeError(msg)
 
     return value
@@ -113,8 +113,8 @@ def get_device(device_id):
 
         if 'DeviceID' not in device:
             if verbose:
-                print(time.ctime() + " Discovered device at "
-                      + device['LocalIP'] + " has no device ID"
+                print(time.ctime() + ' Discovered device at '
+                      + device['LocalIP'] + ' has no device ID'
                       )
             continue
 
@@ -123,36 +123,36 @@ def get_device(device_id):
                 device_found = True
                 if verbose:
                     print(time.ctime()
-                          + " Monitoring discovered device with ID "
+                          + ' Monitoring discovered device with ID '
                           + device['DeviceID']
                           )
                 break
             else:
                 if verbose:
-                    print(time.ctime() + " Discovered device "
-                          + device['DeviceID'] + " has no storage"
+                    print(time.ctime() + ' Discovered device '
+                          + device['DeviceID'] + ' has no storage'
                           )
 
         elif device_id == device['DeviceID']:
             if ('StorageID' in device):
                 device_found = True
                 if verbose:
-                    print(time.ctime() + " Monitoring specified device "
+                    print(time.ctime() + ' Monitoring specified device '
                           + device['DeviceID']
                           )
                 break
             else:
                 if verbose:
-                    print(time.ctime() + " Specified device "
-                          + device['DeviceID'] + " has no storage"
+                    print(time.ctime() + ' Specified device '
+                          + device['DeviceID'] + ' has no storage'
                           )
                 break
 
         else:
             if verbose:
-                print(time.ctime() + " Discovered device "
-                      + device['DeviceID'] + " is not the one you are looking "
-                      + "for"
+                print(time.ctime() + ' Discovered device '
+                      + device['DeviceID'] + ' is not the one you are looking '
+                      + 'for'
                       )
 
         # End device_id if
@@ -197,94 +197,94 @@ def get_max_device_Bps(device):
 def parse_args():
 
     parser = argparse.ArgumentParser(
-               description="Monitor disk space utilization of one "
-               + "HDHomeRun SCRIBE or SERVIO device.  Optionally delete "
-               + "recordings to stay above a specified free space "
-               + "threshold."
+               description='Monitor disk space utilization of one '
+               + 'HDHomeRun SCRIBE or SERVIO device.  Optionally delete '
+               + 'recordings to stay above a specified free space '
+               + 'threshold.'
                )
 
     parser.add_argument(
-      "-d", "--device-id", default=DEFAULT_DEVICE_ID,
-      help="ID of device to monitor. Default is \"%(default)s\", which "
-      + "discovers devices on the local network and monitors the first found "
-      + "with a StorageID."
+      '-d', '--device-id', default=DEFAULT_DEVICE_ID,
+      help='ID of device to monitor. Default is "%(default)s", which '
+      + 'discovers devices on the local network and monitors the first found '
+      + 'with a StorageID.'
       )
 
     parser.add_argument(
-      "-m", "--mode", choices=MODES, default=DEFAULT_MODE,
-      help="Mode of operation. \"report\" mode only reports free space "
-      + "periodically. \"maintain\" mode will maintain minimum free space by "
-      + "deleting recordings when the free space threshold is crossed. "
-      + "Deleted recordings are set to record again. "
-      + "Default is \"%(default)s\"."
+      '-m', '--mode', choices=MODES, default=DEFAULT_MODE,
+      help='Mode of operation. "report" mode only reports free space '
+      + 'periodically. "maintain" mode will maintain minimum free space by '
+      + 'deleting recordings when the free space threshold is crossed. '
+      + 'Deleted recordings are set to record again. '
+      + 'Default is "%(default)s".'
       )
 
     parser.add_argument(
-      "-s", "--delete-policy", choices=DELETE_POLICIES,
+      '-s', '--delete-policy', choices=DELETE_POLICIES,
       default=DEFAULT_DELETE_POLICY,
-      help="Delete policy / sort method. Determines how recordings are "
-      + "sorted when selecting one to delete in maintain mode. "
-      + "\"age\" sorts only on the age of the recordings. \"category\" sorts "
-      + "first by category " + str(CATEGORY_PRIORITY) + ", then by age. "
-      + "\"priority\" sorts first by associated recording rule priority, then "
-      + "age. If no associated recording rule still exists for a recording, "
-      + "its priority defaults to high. "
-      + "Use in combination with -l/--list-recordings to determine which "
-      + "policy works best for your situation. "
-      + "Default is \"%(default)s\"."
+      help='Delete policy / sort method. Determines how recordings are '
+      + 'sorted when selecting one to delete in maintain mode. '
+      + '"age" sorts only on the age of the recordings. "category" sorts '
+      + 'first by category ' + str(CATEGORY_PRIORITY) + ', then by age. '
+      + '"priority" sorts first by associated recording rule priority, then '
+      + 'age. If no associated recording rule still exists for a recording, '
+      + 'its priority defaults to high. '
+      + 'Use in combination with -l/--list-recordings to determine which '
+      + 'policy works best for your situation. '
+      + 'Default is "%(default)s".'
       )
 
-    # Can't use the "default=" option here because we need to later test for
-    # whether a value was passed in or not. If we used "default=", we would
+    # Can't use the 'default=' option here because we need to later test for
+    # whether a value was passed in or not. If we used 'default=', we would
     # not be able to differentiate between the default being set vs passed
     # in by the user.
     parser.add_argument(
-      "-i", "--interval", metavar="SECONDS", type=positive_int,
-      help="Number of seconds between free space checks. Default is "
-      + str(DEFAULT_CHECK_INTERVAL) + " in report mode. In maintain mode, "
-      + "the default is adaptive based on the maximum number of simultaneous "
-      + "recordings supported by the device model, the theoretical maximum "
-      + "bitrate of each recording, and the minimum time it would take to "
-      + "reach the free space threshold since the last check."
+      '-i', '--interval', metavar='SECONDS', type=positive_int,
+      help='Number of seconds between free space checks. Default is '
+      + str(DEFAULT_CHECK_INTERVAL) + ' in report mode. In maintain mode, '
+      + 'the default is adaptive based on the maximum number of simultaneous '
+      + 'recordings supported by the device model, the theoretical maximum '
+      + 'bitrate of each recording, and the minimum time it would take to '
+      + 'reach the free space threshold since the last check.'
       )
 
     parser.add_argument(
-      "-l", "--list-recordings", action="store_true",
-      help="List recordings in the order that they would be deleted in "
-      + "maintain mode, and then exit. Use in combination with "
-      + "-s/--delete-policy to determine which policy works best for your "
-      + "situation."
+      '-l', '--list-recordings', action='store_true',
+      help='List recordings in the order that they would be deleted in '
+      + 'maintain mode, and then exit. Use in combination with '
+      + '-s/--delete-policy to determine which policy works best for your '
+      + 'situation.'
       )
 
     threshold_group = parser.add_mutually_exclusive_group()
 
     threshold_group.add_argument(
-      "-g", "--gigabytes-free", metavar="GIGABYTES", type=positive_float,
-      help="Number of free gigabytes (GiB) of disk space below which "
-      + "action (delete recording) will be taken. Only applicable in "
-      + "maintain mode."
+      '-g', '--gigabytes-free', metavar='GIGABYTES', type=positive_float,
+      help='Number of free gigabytes (GiB) of disk space below which '
+      + 'action (delete recording) will be taken. Only applicable in '
+      + 'maintain mode.'
       )
 
     threshold_group.add_argument(
-      "-p", "--percent-free", metavar="PERCENT", type=percent,
+      '-p', '--percent-free', metavar='PERCENT', type=percent,
       default=DEFAULT_THRESHOLD_PCT,
-      help="Percentage of free disk space below which action (delete "
-      + "recording) will be taken. Only applicable in maintain mode. "
-      + "Default is %(default)s, if neither gigabytes or percent are "
-      + "specified."
+      help='Percentage of free disk space below which action (delete '
+      + 'recording) will be taken. Only applicable in maintain mode. '
+      + 'Default is %(default)s, if neither gigabytes or percent are '
+      + 'specified.'
       )
 
     verbose_group = parser.add_mutually_exclusive_group()
 
     verbose_group.add_argument(
-      "-q", "--quiet", action="store_true",
-      help="Suppress all messages except errors."
+      '-q', '--quiet', action='store_true',
+      help='Suppress all messages except errors.'
       )
 
     verbose_group.add_argument(
-      "-v", "--verbose", action="store_true",
-      help="Print more informational messages.  Free space and delete "
-      + "messages are printed by default."
+      '-v', '--verbose', action='store_true',
+      help='Print more informational messages.  Free space and delete '
+      + 'messages are printed by default.'
       )
 
     return(parser.parse_args())
@@ -348,12 +348,12 @@ def get_sorted_recordings(device, delete_policy):
 def delete_recording(device, recording):
 
     if not quiet:
-        print(time.ctime() + " [" + device['ModelNumber'] + " "
-              + device['DeviceID'] + "]" " Deleting \"" + recording['Title']
-              + "\"" + " recorded on " + time.ctime(recording['StartTime'])
+        print(time.ctime() + ' [' + device['ModelNumber'] + ' '
+              + device['DeviceID'] + ']' ' Deleting "' + recording['Title']
+              + '"' + ' recorded on ' + time.ctime(recording['StartTime'])
               )
 
-    response = requests.post(recording['CmdURL'] + "&cmd=delete&rerecord=1")
+    response = requests.post(recording['CmdURL'] + '&cmd=delete&rerecord=1')
     response.raise_for_status()
 
 # End delete_recording
@@ -361,7 +361,7 @@ def delete_recording(device, recording):
 
 def report_space_utilization(device):
 
-    # All "Space" fields are in bytes
+    # All 'Space' fields are in bytes
     total_gib = device['TotalSpace'] / BYTES_PER_GiB
     free_gib = device['FreeSpace'] / BYTES_PER_GiB
     min_free_gib = device['MinimumFreeSpace'] / BYTES_PER_GiB
@@ -377,19 +377,19 @@ def report_space_utilization(device):
     min_free_pct = (device['MinimumFreeSpace'] / device['TotalSpace']) * 100
 
     if not(quiet):
-        print(time.ctime() + " [" + device['ModelNumber'] + " "
-              + device['DeviceID'] + "]"
-              + " Total: " + str(round(total_gib, 2)) + " GiB;"
-              + " Used: " + str(round(used_gib, 2))
-              + " GiB (" + str(round(used_pct, 1)) + "%);"
-              + " Free: " + str(round(free_gib, 2))
-              + " GiB (" + str(round(free_pct, 1)) + "%)",
+        print(time.ctime() + ' [' + device['ModelNumber'] + ' '
+              + device['DeviceID'] + ']'
+              + ' Total: ' + str(round(total_gib, 2)) + ' GiB;'
+              + ' Used: ' + str(round(used_gib, 2))
+              + ' GiB (' + str(round(used_pct, 1)) + '%);'
+              + ' Free: ' + str(round(free_gib, 2))
+              + ' GiB (' + str(round(free_pct, 1)) + '%)',
               end=''
               )
 
         if device['MinimumFreeSpace'] > 0:
-            print("; Minimum Free: " + str(round(min_free_gib, 2))
-                  + " GiB (" + str(round(min_free_pct, 1)) + "%)"
+            print('; Minimum Free: ' + str(round(min_free_gib, 2))
+                  + ' GiB (' + str(round(min_free_pct, 1)) + '%)'
                   )
         else:
             print('')
@@ -433,7 +433,7 @@ def main():
         device = get_device(args.device_id)
 
         if device is None:
-            print("No device found to monitor", file=sys.stderr)
+            print('No device found to monitor', file=sys.stderr)
             sys.exit(2)
 
         if list_recordings:
@@ -443,9 +443,9 @@ def main():
         if (mode == 'report'):
             device['MinimumFreeSpace'] = 0
             if verbose:
-                print(time.ctime() + " [" + device['ModelNumber'] + " "
-                      + device['DeviceID'] + "] Operating in " + mode
-                      + " mode. No recordings will be deleted."
+                print(time.ctime() + ' [' + device['ModelNumber'] + ' '
+                      + device['DeviceID'] + '] Operating in ' + mode
+                      + ' mode. No recordings will be deleted.'
                       )
 
         # End mode if
@@ -460,16 +460,16 @@ def main():
                                               )
 
             if verbose:
-                print(time.ctime() + " [" + device['ModelNumber'] + " "
-                      + device['DeviceID'] + "] Operating in maintain mode. "
-                      + "Recordings will be deleted to maintain minimum free "
-                      + "space of ", end=''
+                print(time.ctime() + ' [' + device['ModelNumber'] + ' '
+                      + device['DeviceID'] + '] Operating in maintain mode. '
+                      + 'Recordings will be deleted to maintain minimum free '
+                      + 'space of ', end=''
                       )
 
                 if threshold_gib:
-                    print(str(threshold_gib) + " GiB.")
+                    print(str(threshold_gib) + ' GiB.')
                 else:
-                    print(str(threshold_pct) + "%.")
+                    print(str(threshold_pct) + '%.')
 
             # End verbose if
 
@@ -491,9 +491,9 @@ def main():
                         delete_recording(device, sorted_recordings[0])
                     else:
                         if verbose:
-                            print(time.ctime() + " [" + device['ModelNumber']
-                                  + " " + device['DeviceID'] + "] "
-                                  + "No recordings found")
+                            print(time.ctime() + ' [' + device['ModelNumber']
+                                  + ' ' + device['DeviceID'] + '] '
+                                  + 'No recordings found')
                     check_interval = 10
 
                 elif device['FreeSpace'] == device['MinimumFreeSpace']:
@@ -509,9 +509,9 @@ def main():
                 # End FreeSpace if
 
                 if (check_interval_override is None) and verbose:
-                    print(time.ctime() + " [" + device['ModelNumber'] + " "
-                          + device['DeviceID'] + "] Will check again in "
-                          + str(check_interval) + " seconds"
+                    print(time.ctime() + ' [' + device['ModelNumber'] + ' '
+                          + device['DeviceID'] + '] Will check again in '
+                          + str(check_interval) + ' seconds'
                           )
 
             # End maintain if
@@ -536,7 +536,7 @@ def main():
 # End main()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
 
 # vim: set tabstop=8 softtabstop=0 expandtab shiftwidth=4 smarttab ai nu :
