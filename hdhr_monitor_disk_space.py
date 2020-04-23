@@ -393,16 +393,16 @@ def report_space_utilization(device):
               + device['DeviceID'] + ']'
               + ' Total: ' + str(binarysize(device['TotalSpace']))
               + ' Used: ' + str(binarysize(device['UsedSpace']))
-              + ' (' + round(str(used_pct), 1) + '%);'
+              + ' (' + str(round(used_pct, 1)) + '%);'
               + ' Free: ' + str(binarysize(device['FreeSpace']))
-              + ' (' + round(str(free_pct), 1) + '%)',
+              + ' (' + str(round(free_pct, 1)) + '%)',
               end=''
               )
 
         if device['MinimumFreeSpace'] > 0:
             print('; Minimum Free: '
                   + str(binarysize(device['MinimumFreeSpace']))
-                  + ' (' + round(str(min_free_pct), 1) + '%)'
+                  + ' (' + str(round(min_free_pct, 1)) + '%)'
                   )
         else:
             print('')
