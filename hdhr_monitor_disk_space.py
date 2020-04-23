@@ -43,8 +43,10 @@ DELETE_POLICIES = ['age', 'category', 'priority']
 DISCOVER_URL = 'https://my.hdhomerun.com/discover'
 RULES_URL = 'http://my.hdhomerun.com/api/recording_rules?DeviceAuth='
 MAX_STREAMS = {'HDVR': 4, 'HHDD': 6}
+BYTES_PER_KiB = 1024
 BYTES_PER_MiB = 1024**2
 BYTES_PER_GiB = 1024**3
+BYTES_PER_TiB = 1024**4
 
 # Deletion proceeds in the order shown below when using the category policy
 CATEGORY_PRIORITY = ['news',
@@ -350,7 +352,7 @@ def delete_recording(device, recording):
     if not quiet:
         print(time.ctime() + ' [' + device['ModelNumber'] + ' '
               + device['DeviceID'] + ']' ' Deleting "' + recording['Title']
-              + '"' + ' recorded on ' + time.ctime(recording['StartTime'])
+              + '"' + ' recorded at ' + time.ctime(recording['StartTime'])
               )
 
     response = requests.post(recording['CmdURL'] + '&cmd=delete&rerecord=1')
@@ -359,13 +361,23 @@ def delete_recording(device, recording):
 # End delete_recording
 
 
-def report_space_utilization(device):
+def binarysize(bytes, digits=2):
 
-    # All 'Space' fields are in bytes
-    total_gib = device['TotalSpace'] / BYTES_PER_GiB
-    free_gib = device['FreeSpace'] / BYTES_PER_GiB
-    min_free_gib = device['MinimumFreeSpace'] / BYTES_PER_GiB
-    used_gib = device['UsedSpace'] / BYTES_PER_GiB
+    if bytes >= BYTES_PER_TiB:
+        return(str(round(bytes / BYTES_PER_TiB, digits)) + ' TiB')
+    elif bytes >= BYTES_PER_GiB:
+        return(str(round(bytes / BYTES_PER_GiB, digits)) + ' GiB')
+    elif bytes >= BYTES_PER_MiB:
+        return(str(round(bytes / BYTES_PER_MiB, digits)) + ' MiB')
+    elif bytes >= BYTES_PER_KiB:
+        return(str(round(bytes / BYTES_PER_KiB, digits)) + ' KiB')
+    else:
+        return(str(round(bytes, digits)) + ' B')
+
+# End binarysize
+
+
+def report_space_utilization(device):
 
     if device['FreeSpace'] == 0:
         free_pct = 0
@@ -379,17 +391,18 @@ def report_space_utilization(device):
     if not(quiet):
         print(time.ctime() + ' [' + device['ModelNumber'] + ' '
               + device['DeviceID'] + ']'
-              + ' Total: ' + str(round(total_gib, 2)) + ' GiB;'
-              + ' Used: ' + str(round(used_gib, 2))
-              + ' GiB (' + str(round(used_pct, 1)) + '%);'
-              + ' Free: ' + str(round(free_gib, 2))
-              + ' GiB (' + str(round(free_pct, 1)) + '%)',
+              + ' Total: ' + str(binarysize(device['TotalSpace']))
+              + ' Used: ' + str(binarysize(device['UsedSpace']))
+              + ' (' + round(str(used_pct), 1) + '%);'
+              + ' Free: ' + str(binarysize(device['FreeSpace']))
+              + ' (' + round(str(free_pct), 1) + '%)',
               end=''
               )
 
         if device['MinimumFreeSpace'] > 0:
-            print('; Minimum Free: ' + str(round(min_free_gib, 2))
-                  + ' GiB (' + str(round(min_free_pct, 1)) + '%)'
+            print('; Minimum Free: '
+                  + str(binarysize(device['MinimumFreeSpace']))
+                  + ' (' + round(str(min_free_pct), 1) + '%)'
                   )
         else:
             print('')
@@ -405,6 +418,71 @@ def print_recording_list(recordings):
         print(time.ctime(recording['StartTime']) + ': ' + recording['Title'])
 
 # End print_recording_list
+
+
+def duration(seconds):
+
+    MINUTE_SECONDS = 60
+    HOUR_SECONDS = MINUTE_SECONDS * 60
+    DAY_SECONDS = HOUR_SECONDS * 24
+
+    duration_text = ''
+    remaining_seconds = seconds
+
+    if remaining_seconds >= DAY_SECONDS:
+        days = math.floor(remaining_seconds/DAY_SECONDS)
+        duration_text = duration_text + str(days)
+
+        if days == 1:
+            duration_text = duration_text + ' day'
+        else:
+            duration_text = duration_text + ' days'
+
+        remaining_seconds = remaining_seconds - (days * DAY_SECONDS)
+
+    if remaining_seconds >= HOUR_SECONDS:
+        hours = math.floor(remaining_seconds/HOUR_SECONDS)
+
+        if len(duration_text) > 0:
+            duration_text = duration_text + ', '
+        duration_text = duration_text + str(hours)
+
+        if hours == 1:
+            duration_text = duration_text + ' hour'
+        else:
+            duration_text = duration_text + ' hours'
+
+        remaining_seconds = remaining_seconds - (hours * HOUR_SECONDS)
+
+    if remaining_seconds >= MINUTE_SECONDS:
+        minutes = math.floor(remaining_seconds/MINUTE_SECONDS)
+
+        if len(duration_text) > 0:
+            duration_text = duration_text + ', '
+        duration_text = duration_text + str(minutes)
+
+        if minutes == 1:
+            duration_text = duration_text + ' minute'
+        else:
+            duration_text = duration_text + ' minutes'
+
+        remaining_seconds = remaining_seconds - (minutes * MINUTE_SECONDS)
+
+    if remaining_seconds > 0:
+        seconds = remaining_seconds
+
+        if len(duration_text) > 0:
+            duration_text = duration_text + ', '
+        duration_text = duration_text + str(seconds)
+
+        if seconds == 1:
+            duration_text = duration_text + ' second'
+        else:
+            duration_text = duration_text + ' seconds'
+
+    return(duration_text)
+
+# End duration
 
 
 def main():
@@ -459,6 +537,16 @@ def main():
                                               * (threshold_pct / 100)
                                               )
 
+            if device['MinimumFreeSpace'] > device['TotalSpace']:
+                print(time.ctime() + ' [' + device['ModelNumber'] + ' '
+                      + device['DeviceID'] + '] Minimum free space ('
+                      + str(binarysize(device['MinimumFreeSpace']))
+                      + ') is greater than total space ('
+                      + str(binarysize(device['TotalSpace']))
+                      + ')'
+                      )
+                sys.exit(2)
+
             if verbose:
                 print(time.ctime() + ' [' + device['ModelNumber'] + ' '
                       + device['DeviceID'] + '] Operating in maintain mode. '
@@ -511,7 +599,7 @@ def main():
                 if (check_interval_override is None) and verbose:
                     print(time.ctime() + ' [' + device['ModelNumber'] + ' '
                           + device['DeviceID'] + '] Will check again in '
-                          + str(check_interval) + ' seconds'
+                          + duration(check_interval)
                           )
 
             # End maintain if
