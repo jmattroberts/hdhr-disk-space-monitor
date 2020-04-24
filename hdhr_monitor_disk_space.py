@@ -38,6 +38,8 @@ DEFAULT_DEVICE_ID = 'discover'
 DEFAULT_MODE = 'report'
 DEFAULT_CHECK_INTERVAL = 600
 DEFAULT_DELETE_POLICY = 'age'
+DEFAULT_WATCHED_OFFSET = 180
+MAX_RESUME = 2**32 - 1
 MODES = ['report', 'maintain']
 DELETE_POLICIES = ['age', 'category', 'priority']
 DISCOVER_URL = 'https://my.hdhomerun.com/discover'
@@ -221,21 +223,6 @@ def parse_args():
       + 'Default is "%(default)s".'
       )
 
-    parser.add_argument(
-      '-s', '--delete-policy', choices=DELETE_POLICIES,
-      default=DEFAULT_DELETE_POLICY,
-      help='Delete policy / sort method. Determines how recordings are '
-      + 'sorted when selecting one to delete in maintain mode. '
-      + '"age" sorts only on the age of the recordings. "category" sorts '
-      + 'first by category ' + str(CATEGORY_PRIORITY) + ', then by age. '
-      + '"priority" sorts first by associated recording rule priority, then '
-      + 'age. If no associated recording rule still exists for a recording, '
-      + 'its priority defaults to high. '
-      + 'Use in combination with -l/--list-recordings to determine which '
-      + 'policy works best for your situation. '
-      + 'Default is "%(default)s".'
-      )
-
     # Can't use the 'default=' option here because we need to later test for
     # whether a value was passed in or not. If we used 'default=', we would
     # not be able to differentiate between the default being set vs passed
@@ -248,14 +235,6 @@ def parse_args():
       + 'recordings supported by the device model, the theoretical maximum '
       + 'bitrate of each recording, and the minimum time it would take to '
       + 'reach the free space threshold since the last check.'
-      )
-
-    parser.add_argument(
-      '-l', '--list-recordings', action='store_true',
-      help='List recordings in the order that they would be deleted in '
-      + 'maintain mode, and then exit. Use in combination with '
-      + '-s/--delete-policy to determine which policy works best for your '
-      + 'situation.'
       )
 
     threshold_group = parser.add_mutually_exclusive_group()
@@ -276,6 +255,47 @@ def parse_args():
       + 'specified.'
       )
 
+    parser.add_argument(
+      '-s', '--delete-policy', choices=DELETE_POLICIES,
+      default=DEFAULT_DELETE_POLICY,
+      help='Delete policy / sort method. Determines how recordings are '
+      + 'sorted when selecting one to delete in maintain mode. '
+      + '"age" sorts only on the age of the recordings. "category" sorts '
+      + 'first by category ' + str(CATEGORY_PRIORITY) + ', then by age. '
+      + '"priority" sorts first by associated recording rule priority, then '
+      + 'age. If no associated recording rule still exists for a recording, '
+      + 'its priority defaults to high. '
+      + 'Use in combination with -l/--list-recordings to determine which '
+      + 'policy works best for your situation. '
+      + 'Default is "%(default)s".'
+      )
+
+    parser.add_argument(
+      '-w', '--watched-first', action='store_true', default=False,
+      help='Delete watched recordings first, before applying the selected '
+      + 'delete policy / sort method. Default is to apply the selected delete '
+      + 'policy / sort method without regard to whether recordings are '
+      + 'watched or not.'
+      )
+
+    parser.add_argument(
+      '-o', '--watched-offset', metavar='SECONDS', type=positive_int,
+      default=DEFAULT_WATCHED_OFFSET,
+      help='Number of unwatched seconds at the end of a recording at which to '
+      + 'consider it "watched". Default is %(default)s seconds ('
+      + duration(DEFAULT_WATCHED_OFFSET) + '), meaning that '
+      + 'the recording must be watched to within %(default)s seconds of the '
+      + 'end to be considered watched.'
+      )
+
+    parser.add_argument(
+      '-l', '--list-recordings', action='store_true', default=False,
+      help='List recordings in the order that they would be deleted in '
+      + 'maintain mode, and then exit. Use in combination with '
+      + '-s/--delete-policy to determine which policy works best for your '
+      + 'situation.'
+      )
+
     verbose_group = parser.add_mutually_exclusive_group()
 
     verbose_group.add_argument(
@@ -294,7 +314,9 @@ def parse_args():
 # End parse_args
 
 
-def get_sorted_recordings(device, delete_policy):
+def get_sorted_recordings(device, sort_method, watched_first,
+                          watched_threshold
+                          ):
 
     default_priority = 9999
 
@@ -306,25 +328,56 @@ def get_sorted_recordings(device, delete_policy):
     response.raise_for_status()
     rules = response.json()
 
-    if delete_policy == 'age':
-        sorted_recordings = sorted(recordings, key=lambda r: r['StartTime'])
+    for recording in recordings:
+        if 'Resume' in recording:
+            if recording['Resume'] == MAX_RESUME:
+                recording['Watched'] = 1
+            else:
+                seconds_unwatched = (recording['RecordEndTime']
+                                     - recording['RecordStartTime']
+                                     - recording['Resume'])
+                if (seconds_unwatched <= watched_threshold):
+                    recording['Watched'] = 1
+                else:
+                    recording['Watched'] = 0
+        else:
+            recording['Watched'] = 0
 
-    elif delete_policy == 'category':
+    if sort_method == 'age':
+        if watched_first:
+            sorted_recordings = sorted(recordings,
+                                       key=lambda r: (-r['Watched'],
+                                                      r['StartTime']
+                                                      )
+                                       )
+        else:
+            sorted_recordings = sorted(recordings,
+                                       key=lambda r: r['StartTime']
+                                       )
+
+    elif sort_method == 'category':
         for recording in recordings:
             recording['CategoryPriority'] = CATEGORY_PRIORITY.index(
                                               recording['Category']
                                               )
-        sorted_recordings = sorted(recordings,
-                                   key=lambda r: (r['CategoryPriority'],
-                                                  r['StartTime']
-                                                  ))
+        if watched_first:
+            sorted_recordings = sorted(recordings,
+                                       key=lambda r: (-r['Watched'],
+                                                      r['CategoryPriority'],
+                                                      r['StartTime']
+                                                      ))
+        else:
+            sorted_recordings = sorted(recordings,
+                                       key=lambda r: (r['CategoryPriority'],
+                                                      r['StartTime']
+                                                      ))
 
-    elif delete_policy == 'priority':
+    elif sort_method == 'priority':
 
         for recording in recordings:
 
-            # Default to lowest priority in case no rule is found, or no
-            # priority is given in the rule (i.e., on-off recordings)
+            # Default to highest priority in case no rule is found, or no
+            # priority is given in the rule (i.e., one-off recordings)
             recording['RulePriority'] = default_priority
 
             for rule in rules:
@@ -335,12 +388,19 @@ def get_sorted_recordings(device, delete_policy):
 
         # End recordings loop
 
-        sorted_recordings = sorted(recordings,
-                                   key=lambda r: (r['RulePriority'],
-                                                  r['StartTime']
-                                                  ))
+        if watched_first:
+            sorted_recordings = sorted(recordings,
+                                       key=lambda r: (-r['Watched'],
+                                                      r['RulePriority'],
+                                                      r['StartTime']
+                                                      ))
+        else:
+            sorted_recordings = sorted(recordings,
+                                       key=lambda r: (r['RulePriority'],
+                                                      r['StartTime']
+                                                      ))
 
-    # End delete_policy if
+    # End sort_method if
 
     return(sorted_recordings)
 
@@ -415,7 +475,13 @@ def report_space_utilization(device):
 def print_recording_list(recordings):
 
     for recording in recordings:
-        print(time.ctime(recording['StartTime']) + ': ' + recording['Title'])
+        print(time.ctime(recording['StartTime']) + ': ' + recording['Title'],
+              end=''
+              )
+        if recording['Watched'] == 1:
+            print(' (watched)')
+        else:
+            print('')
 
 # End print_recording_list
 
@@ -493,7 +559,6 @@ def main():
     check_interval = DEFAULT_CHECK_INTERVAL
     threshold_gib = None
     threshold_pct = None
-    list_recordings = False
 
     args = parse_args()
 
@@ -504,6 +569,8 @@ def main():
     check_interval_override = args.interval
     threshold_gib = args.gigabytes_free
     threshold_pct = args.percent_free
+    watched_first = args.watched_first
+    watched_offset = args.watched_offset
     list_recordings = args.list_recordings
 
     try:
@@ -515,7 +582,10 @@ def main():
             sys.exit(2)
 
         if list_recordings:
-            print_recording_list(get_sorted_recordings(device, delete_policy))
+            print_recording_list(get_sorted_recordings(device, delete_policy,
+                                                       watched_first,
+                                                       watched_offset
+                                                       ))
             sys.exit()
 
         if (mode == 'report'):
@@ -572,9 +642,12 @@ def main():
             if mode == 'maintain':
 
                 if device['FreeSpace'] < device['MinimumFreeSpace']:
-                    sorted_recordings = get_sorted_recordings(device,
-                                                              delete_policy
-                                                              )
+                    sorted_recordings = \
+                      get_sorted_recordings(device,
+                                            delete_policy,
+                                            watched_first,
+                                            watched_offset
+                                            )
                     if len(sorted_recordings) > 0:
                         delete_recording(device, sorted_recordings[0])
                     else:
