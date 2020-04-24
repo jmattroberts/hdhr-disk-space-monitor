@@ -41,7 +41,7 @@ DEFAULT_DELETE_POLICY = 'age'
 MODES = ['report', 'maintain']
 DELETE_POLICIES = ['age', 'category', 'priority']
 DISCOVER_URL = 'https://my.hdhomerun.com/discover'
-RULES_URL = 'http://my.hdhomerun.com/api/recording_rules?DeviceAuth='
+RULES_URL = 'https://my.hdhomerun.com/api/recording_rules?DeviceAuth='
 MAX_STREAMS = {'HDVR': 4, 'HHDD': 6}
 BYTES_PER_KiB = 1024
 BYTES_PER_MiB = 1024**2
@@ -613,13 +613,16 @@ def main():
 
     except HTTPError as http_err:
         print(f'HTTP error occurred: {http_err}', file=sys.stderr)
+        sys.exit(2)
     except JSONDecodeError as json_err:
         print(f'JSON decoding error occurred: {json_err}', file=sys.stderr)
+        sys.exit(2)
     except KeyboardInterrupt:
         print()
         sys.exit()
     except Exception as err:
         print(f'Other error occurred: {err}', file=sys.stderr)
+        sys.exit(2)
 
 # End main()
 
