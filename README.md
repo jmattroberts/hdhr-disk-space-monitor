@@ -1,5 +1,89 @@
 # hdhr-disk-space-monitor
 Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device. Optionally delete recordings to stay above a specified free space threshold.
+
+
+# Device Selection
+```
+--device discover
+```
+
+Each instance of the monitor will monitor only one device. By default, devices are discovered on the local network and the first one found with a StorageID is monitored. Optionally, a specific device ID can be passed to the monitor.
+
+# Modes of Operation
+
+## Report Mode
+```
+--mode report
+```
+
+In the default "report" mode, the monitor reports disk space utilization periodically. The default reporting interval, which can be overridden, is 10 minutes.
+
+```
+Tue Apr 21 17:04:49 2020 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 278.05 GiB (29.9%); Free: 653.01 GiB (70.1%)
+Tue Apr 21 17:14:49 2020 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 278.05 GiB (29.9%); Free: 653.01 GiB (70.1%)
+```
+
+## Maintain Mode
+```
+--mode maintain
+```
+
+In "maintain" mode, the monitor will report disk space utilization, and also maintain a minimum amount of free disk space.  It does this by deleting one recording per disk space check if less than the minimum of free space is available. This will continue until the minimum amount of free space is made available.
+
+```
+Tue Apr 21 17:07:31 2020 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 913.06 GiB (98.1%); Free: 18.0 GiB (1.9%); Minimum Free: 18.62 GiB (2.0%)
+Tue Apr 21 17:07:32 2020 [HDVR-4US-1TB 12345678] Deleting "Keeping Up Appearances" recorded on Sun Jul 28 22:30:00 2019
+```
+### Minimum Free Space
+```
+--percent-free PERCENT
+--gigabytes-free GIGABYTES
+```
+The default amount of free space to maintain is 2%. This can be overridden with a different percentage, or with an absolute number of gigabytes (GiB).
+
+### Delete Policies
+```
+--delete-policy {age,category,priority}
+```
+
+There are 3 delete policies that can be applied to select a recording to be deleted.
+
+* **Age** - (default) The oldest recording is selected
+* **Category** - Recordings are sorted first by category, then by age within category. The oldest recording in the least important category is selected. The categories, in order of increasing importance are:
+  * News
+  * Series
+  * Sports
+  * Movies
+  * Specials
+* **Priority** - The recordings are sorted first by recording rule priority, then by age within priority. Recordings that have no associated recording rule are given high priority. The oldest recording with the lowest priority is selected.
+
+### Watched Recordings
+```
+--watched-first
+--watched-offset SECONDS
+```
+The delete policies described above do not take into account whether recordings have been watched or not. To have watched recordings deleted first, before the selected delete policy comes into effect, use the `--watched-first` option.
+
+A recording is considered to be watched if there are fewer than 3 minutes remaining to be watched. This can be modified using the `--watched-offset` option.
+
+### Adaptive Interval
+
+In "maintain" mode, the default interval between checks is not consistent. It is adaptive based on the maximum number of simultaneous recordings supported by the device model (SCRIBE: 4, SERVIO: 6), the theoretical maximum bitrate of each recording (19.4 Mb/s), and the minimum time it would take to reach the free space threshold since the last check.
+
+The more free space is avalable, the longer it will be between checks - up to many hours. If there is very little free space available, it might be only a few seconds between checks. The time until the next check is printed in verbose mode.
+
+If the interval is overridden, the override will be used exclusively instead of the adaptive interval.
+
+# Listing Recordings
+```
+--list-recordings
+```
+This option is available so that, in combination with `--delete-policy` and `--watched-first`, recordings can be listed in the order that they would be deleted. This can help determine which delete policy is preferred.
+
+No space check or deletion happens when this option is used.
+
+# Usage Guide
+
 ```
 usage: hdhr_monitor_disk_space.py [-h] [-d DEVICE_ID] [-m {report,maintain}]
                                   [-i SECONDS] [-g GIGABYTES | -p PERCENT]
