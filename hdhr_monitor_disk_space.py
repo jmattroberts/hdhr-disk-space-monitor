@@ -183,16 +183,25 @@ def validate_watched_offset(string):
 
 def binarysize(bytes, digits=2):
 
+    fmt = '{:.' + str(digits) + 'f}'
+
     if bytes >= BYTES_PER_TiB:
-        return(str(round(bytes / BYTES_PER_TiB, digits)) + ' TiB')
+        fmt = fmt + ' TiB'
+        divisor = BYTES_PER_TiB
     elif bytes >= BYTES_PER_GiB:
-        return(str(round(bytes / BYTES_PER_GiB, digits)) + ' GiB')
+        fmt = fmt + ' GiB'
+        divisor = BYTES_PER_GiB
     elif bytes >= BYTES_PER_MiB:
-        return(str(round(bytes / BYTES_PER_MiB, digits)) + ' MiB')
+        fmt = fmt + ' MiB'
+        divisor = BYTES_PER_MiB
     elif bytes >= BYTES_PER_KiB:
-        return(str(round(bytes / BYTES_PER_KiB, digits)) + ' KiB')
+        fmt = fmt + ' KiB'
+        divisor = BYTES_PER_KiB
     else:
-        return(str(round(bytes, digits)) + ' B')
+        fmt = fmt + ' B'
+        divisor = 1
+
+    return(fmt.format(bytes / divisor))
 
 # End binarysize
 
@@ -733,19 +742,19 @@ def report_space_utilization(device):
         return()
 
     if device['FreeSpace'] == 0:
-        free_pct = 0
-        used_pct = 100
+        free_pct = 0.0
+        used_pct = 100.0
     else:
         free_pct = (device['FreeSpace'] / device['TotalSpace']) * 100
         used_pct = (device['UsedSpace'] / device['TotalSpace']) * 100
 
     print(time.ctime() + ' [' + device['ModelNumber'] + ' '
           + device['DeviceID'] + ']'
-          + ' Total: ' + str(binarysize(device['TotalSpace']))
-          + ' Used: ' + str(binarysize(device['UsedSpace']))
-          + ' (' + str(round(used_pct, 1)) + '%);'
-          + ' Free: ' + str(binarysize(device['FreeSpace']))
-          + ' (' + str(round(free_pct, 1)) + '%)',
+          + ' Total: ' + binarysize(device['TotalSpace']) + ';'
+          + ' Used: ' + binarysize(device['UsedSpace'])
+          + ' ({:.1f}%);'.format(used_pct)
+          + ' Free: ' + binarysize(device['FreeSpace'])
+          + ' ({:.1f}%)'.format(free_pct),
           end=''
           )
 
@@ -754,8 +763,8 @@ def report_space_utilization(device):
                         / device['TotalSpace']
                         ) * 100
         print('; Minimum Free: '
-              + str(binarysize(device['MinimumFreeSpace']))
-              + ' (' + str(round(min_free_pct, 1)) + '%)'
+              + binarysize(device['MinimumFreeSpace'])
+              + ' ({:.1f}%)'.format(min_free_pct)
               )
     else:
         print('')
@@ -830,9 +839,9 @@ def main():
             if device['MinimumFreeSpace'] > device['TotalSpace']:
                 print(time.ctime() + ' [' + device['ModelNumber'] + ' '
                       + device['DeviceID'] + '] Minimum free space ('
-                      + str(binarysize(device['MinimumFreeSpace']))
+                      + binarysize(device['MinimumFreeSpace'])
                       + ') is greater than total space ('
-                      + str(binarysize(device['TotalSpace']))
+                      + binarysize(device['TotalSpace'])
                       + ')', file=sys.stderr
                       )
                 sys.exit(2)
