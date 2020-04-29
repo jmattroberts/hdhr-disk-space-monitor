@@ -157,7 +157,8 @@ def percent_free(string):
 def validate_percent_free(string):
 
     try:
-        percent_free(string)
+        if string is not None:
+            percent_free(string)
     except Exception:
         raise ValueError('invalid percent_free value: %r' % string)
 
@@ -444,11 +445,15 @@ def parse_args():
                                            section, 'gigabytes_free',
                                            fallback=defaults['gigabytes_free']
                                            )
+            if defaults['gigabytes_free'] == '':
+                defaults['gigabytes_free'] = None
             validate_gigabytes_free(defaults['gigabytes_free'])
             defaults['percent_free'] = config.get(
                                          section, 'percent_free',
                                          fallback=defaults['percent_free']
                                          )
+            if defaults['percent_free'] == '':
+                defaults['percent_free'] = None
             validate_percent_free(defaults['percent_free'])
             defaults['watched_first'] = config.getboolean(
                                           section, 'watched_first',
@@ -459,6 +464,16 @@ def parse_args():
                                            fallback=defaults['watched_offset']
                                            )
             validate_watched_offset(defaults['watched_offset'])
+
+            if (defaults['gigabytes_free'] is not None
+                    and defaults['percent_free'] is not None):
+                raise ValueError('gigabytes_free and percent_free cannot both '
+                                 + 'be specified'
+                                 )
+
+            if (defaults['gigabytes_free'] is None
+                    and defaults['percent_free'] is None):
+                defaults['percent_free'] = DEFAULT_THRESHOLD_PCT
 
             parser.set_defaults(**defaults)
 
