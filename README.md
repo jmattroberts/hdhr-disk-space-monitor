@@ -19,8 +19,8 @@ Each instance of the monitor will monitor only one device. By default, devices a
 In the default "report" mode, the monitor reports disk space utilization periodically. The default reporting interval, which can be overridden, is 10 minutes.
 
 ```
-Tue Apr 21 17:04:49 2020 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 278.05 GiB (29.9%); Free: 653.01 GiB (70.1%)
-Tue Apr 21 17:14:49 2020 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 278.05 GiB (29.9%); Free: 653.01 GiB (70.1%)
+2020-05-01 22:26:54,844 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 588.58 GiB (63.2%); Free: 342.48 GiB (36.8%)
+2020-05-01 22:36:54,956 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 589.44 GiB (63.3%); Free: 341.61 GiB (36.7%)
 ```
 
 ## Maintain Mode
@@ -33,15 +33,15 @@ In "maintain" mode, the monitor will report disk space utilization as it does in
 When the minimum free space threshold is crossed, an "off-interval" report will be written, and then a recording will be deleted.
 
 ```
-Tue Apr 21 17:07:31 2020 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 913.06 GiB (98.1%); Free: 18.0 GiB (1.9%); Minimum Free: 18.62 GiB (2.0%)
-Tue Apr 21 17:07:32 2020 [HDVR-4US-1TB 12345678] Deleting "Keeping Up Appearances" recorded on Sun Jul 28 22:30:00 2019
+2020-05-01 23:53:49,885 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 913.06 GiB (98.1%); Free: 18.0 GiB (1.9%); Minimum Free: 18.62 GiB (2.0%)
+2020-05-01 23:53:50,637 [HDVR-4US-1TB 12345678] Deleting "Keeping Up Appearances" recorded on Sun Jul 28 22:30:00 2019
 
 ```
 The disk space checks for free space maintenance are separate from those for the report. They happen in the background at an interval determined by the amount of free disk space as of the last maintenance check. The more disk space is available, the longer it will be until the next check - up to many hours. If there is very little free space left, the maintenance checks can be as often as every few seconds. This can be observed in verbose mode, but it can get very... verbose.
 
 ```
-Tue Apr 28 17:12:58 2020 [HDVR-4US-1TB 15203648] Running maintenance cycle - checking free space
-Tue Apr 28 17:12:58 2020 [HDVR-4US-1TB 15203648] Next maintenance cycle in 13 hours, 26 minutes, 48 seconds
+2020-05-01 23:53:49,885 [HDVR-4US-1TB 12345678] Running maintenance cycle - checking free space
+2020-05-01 23:53:49,901 [HDVR-4US-1TB 12345678] Next maintenance cycle in 9 hours, 28 minutes, 17 seconds
 ```
 ### Minimum Free Space
 ```
