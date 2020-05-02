@@ -28,7 +28,7 @@ Tue Apr 21 17:14:49 2020 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 278.05
 --mode maintain
 ```
 
-In "maintain" mode, the monitor will report disk space utilization as it does in report mode, as well as maintain a minimum amount of free disk space.  It does this by deleting one recording per disk space check if less than the minimum of free space is available. This will continue until the minimum amount of free space is made available.
+In "maintain" mode, the monitor will report disk space utilization as it does in report mode, as well as maintain a minimum amount of free disk space.  It does this by deleting one recording per disk space check if less than the minimum amount of free space is available. This will continue until the minimum is made available.
 
 When the minimum free space threshold is crossed, an "off-interval" report will be written, and then a recording will be deleted.
 
