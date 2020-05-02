@@ -1,5 +1,5 @@
 # hdhr-disk-space-monitor
-Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device. Optionally delete recordings to stay above a specified free space threshold.
+Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device. Optionally delete recordings to stay above a specified minimum free space.
 
 
 # Device Selection
@@ -40,7 +40,7 @@ Tue Apr 21 17:07:32 2020 [HDVR-4US-1TB 12345678] Deleting "Keeping Up Appearance
 The disk space checks for free space maintenance are separate from those for the report. They happen in the background at an interval determined by the amount of free disk space as of the last maintenance check. The more disk space is available, the longer it will be until the next check - up to many hours. If there is very little free space left, the maintenance checks can be as often as every few seconds. This can be observed in verbose mode, but it can get very... verbose.
 
 ```
-Tue Apr 28 17:12:58 2020 [HDVR-4US-1TB 15203648] Running maintenance cycle
+Tue Apr 28 17:12:58 2020 [HDVR-4US-1TB 15203648] Running maintenance cycle - checking free space
 Tue Apr 28 17:12:58 2020 [HDVR-4US-1TB 15203648] Next maintenance cycle in 13 hours, 26 minutes, 48 seconds
 ```
 ### Minimum Free Space
@@ -86,53 +86,51 @@ No space check or deletion happens when this option is used.
 # Usage Guide
 
 ```
-usage: hdhr_monitor_disk_space.py [-h] [-c FILE] [-d DEVICE_ID]
+usage: hdhr_monitor_disk_space.py [-h] [-f FILE] [-d DEVICE_ID]
                                   [-m {report,maintain}] [-i SECONDS]
-                                  [-g GIGABYTES | -p PERCENT]
+                                  [-c NUMBER] [-g GIGABYTES | -p PERCENT]
                                   [-s {age,category,priority}] [-w]
                                   [-o SECONDS] [-l] [-q | -v]
 
 Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device.
-Optionally delete recordings to stay above a specified free space threshold.
+Optionally delete recordings to stay above a specified free space minimum.
 
 optional arguments:
   -h, --help            show this help message and exit
-  -c FILE, --conf-file FILE
+  -f FILE, --conf-file FILE
                         Path to configuration file. The configuration file
-                        supports overriding default settings described below
-                        in a general way, as well as per-device settings. See
-                        example. Per-device settings are only applied when a
-                        specific device ID is provided using -d/--device-id.
-                        Options given on the command-line override those in
-                        the configuration file.
+                        supports overriding the built-in defaults, as well as
+                        per-device settings. See example. Per-device settings
+                        are applied when a device ID is specified using
+                        -d/--device-id. Options given on the command-line
+                        override those in the configuration file.
   -d DEVICE_ID, --device-id DEVICE_ID
                         ID of device to monitor. Default is "discover" which
                         discovers devices on the local network and monitors
-                        the first found with a StorageID.
+                        the first device found with a StorageID.
   -m {report,maintain}, --mode {report,maintain}
-                        Mode of operation. "report" mode only reports free
-                        space periodically. "maintain" mode will maintain
-                        minimum free space by deleting recordings when the
-                        free space threshold is crossed. Deleted recordings
-                        are set to record again. Default is "report".
+                        Mode of operation. "report" mode reports disk space
+                        utilization periodically. "maintain" mode reports disk
+                        space utilization, and also maintains a minimum amount
+                        of free space by deleting recordings when less than
+                        the minimum amount of free space is available. Deleted
+                        recordings are set to record again. Default is
+                        "report".
   -i SECONDS, --interval SECONDS
                         Number of seconds between space utilization reports.
-                        Default is 600. In maintain mode, the maintenance
-                        cycle runs independently with an adaptive interval.
-                        The maintenance interval is calculated based on the
-                        maximum number of simultaneous recordings supported by
-                        the device model, the theoretical maximum bitrate of
-                        each recording, and the minimum time it would take to
-                        reach the free space threshold since the last check.
+                        Default is 600.
+  -c NUMBER, --count NUMBER
+                        Number of space utilization reports to print before
+                        stopping. Default is to continue forever.
   -g GIGABYTES, --gigabytes-free GIGABYTES
-                        Number of free gigabytes (GiB) of disk space below
-                        which action (delete recording) will be taken. Only
-                        applicable in maintain mode.
+                        Minimum number of free gigabytes (GiB) of disk space
+                        to maintain. Only applicable in maintain mode. Cannot
+                        be used in combination with -p/--percent-free.
   -p PERCENT, --percent-free PERCENT
-                        Percentage of free disk space below which action
-                        (delete recording) will be taken. Only applicable in
-                        maintain mode. Default is 2, if neither gigabytes or
-                        percent are specified.
+                        Minimum percentage of free disk space to maintain.
+                        Only applicable in maintain mode. Cannot be used in
+                        combination with -g/--gigabytes-free. Default is 2.0,
+                        if neither gigabytes or percent are specified.
   -s {age,category,priority}, --delete-policy {age,category,priority}
                         Delete policy / sort method. Determines how recordings
                         are sorted when selecting one to delete in maintain
@@ -146,20 +144,29 @@ optional arguments:
                         which policy works best for your situation. Default is
                         "age".
   -w, --watched-first   Delete watched recordings first, before applying the
-                        selected delete policy / sort method. Default is to
-                        apply the selected delete policy / sort method without
-                        regard to whether recordings are watched or not.
+                        selected delete policy. Default is to apply the
+                        selected delete policy without regard to whether
+                        recordings are watched or not.
   -o SECONDS, --watched-offset SECONDS
-                        Number of unwatched seconds at the end of a recording
-                        at which to consider it "watched". Default is 180
-                        seconds (3 minutes), meaning that the recording must
-                        be watched to within 180 seconds of the end to be
-                        considered watched.
+                        Threshold for considering a recording "watched". This
+                        is the number of seconds remaining to be watched at
+                        the end of a recording below which it is considered
+                        "watched". Default is 180 seconds (3 minutes).
   -l, --list-recordings
                         List recordings in the order that they would be
                         deleted in maintain mode, and then exit. Use in
-                        combination with -s/--delete-policy to determine which
-                        policy works best for your situation.
+                        combination with -s/--delete-policy and -w/--watched-
+                        first to determine which policy works best for your
+                        situation.
   -q, --quiet           Suppress all messages except errors.
   -v, --verbose         Print more informational messages. Free space and
-                        delete messages are printed by default.```
+                        delete messages are printed by default.
+
+The interval for free space checks in maintain mode is independent from the
+interval for disk utilization reports (-i/--interval). The maintenance runs in
+the background at an interval based on the amount of free space found during
+the last check. If there is a lot of space available, it will be a long time -
+maybe many hours - before the next check. If there is little free space
+available, it might be only a few seconds until the next check. This can be
+observed with verbose output enabled (-v/--verbose).
+```
