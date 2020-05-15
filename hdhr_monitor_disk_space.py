@@ -623,8 +623,9 @@ def get_device(device_id):
             raise NoDeviceFoundError
 
     # Custom elements
+    device['StatusURL'] = f"{device['BaseURL']}/status.json"
     device['MinimumFreeSpace'] = 0
-    device['Tag'] = f'[{device["ModelNumber"]} {device["DeviceID"]}]'
+    device['Tag'] = f"[{device['ModelNumber']} {device['DeviceID']}]"
 
     model_family = re.match(r'[A-Z]{4}', device['ModelNumber']).group()
     max_device_streams = (MAX_STREAMS[model_family])
@@ -676,6 +677,7 @@ def get_sorted_recordings(device, sort_method, watched_first,
                           ):
 
     default_priority = 9999
+    current_streams = []
 
     response = requests.get(device['StorageURL'])
     response.raise_for_status()
@@ -685,20 +687,31 @@ def get_sorted_recordings(device, sort_method, watched_first,
     response.raise_for_status()
     rules = response.json()
 
+    response = requests.get(device['StatusURL'])
+    response.raise_for_status()
+    resources = response.json()
+
+    for resource in resources:
+        if resource['Resource'] == 'playback':
+            current_streams.append(resource)
+
     for recording in recordings:
-        if 'Resume' in recording:
+        recording['Playing'] = False
+        recording['Watched'] = False
+
+        for stream in current_streams:
+            if f"{stream['Name']}.mpg" == recording['Filename']:
+                recording['Playing'] = True
+
+        if 'Resume' in recording and not(recording['Playing']):
             if recording['Resume'] == MAX_RESUME:
-                recording['Watched'] = 1
+                recording['Watched'] = True
             else:
                 seconds_unwatched = (recording['RecordEndTime']
                                      - recording['RecordStartTime']
                                      - recording['Resume'])
                 if (seconds_unwatched <= watched_threshold):
-                    recording['Watched'] = 1
-                else:
-                    recording['Watched'] = 0
-        else:
-            recording['Watched'] = 0
+                    recording['Watched'] = True
 
     if sort_method == 'age':
         if watched_first:
@@ -766,8 +779,10 @@ def print_recording_list(recordings):
 
     for recording in recordings:
         msg = f'{time.ctime(recording["StartTime"])}: {recording["Title"]}'
-        if recording['Watched'] == 1:
+        if recording['Watched']:
             msg += ' (watched)'
+        elif recording['Playing']:
+            msg += ' (playing)'
         print(msg)
 
 # End print_recording_list
@@ -784,7 +799,10 @@ def delete_recording(device, delete_policy, watched_first, watched_offset):
         pass
 
     if len(sorted_recordings) > 0:
-        recording = sorted_recordings[0]
+        for recording in sorted_recordings:
+            if not recording['Playing']:
+                break
+
         logger.info(f'{device["Tag"]} '
                     + f'Deleting "{recording["Title"]}" recorded at '
                     + f'{time.ctime(recording["StartTime"])}',
