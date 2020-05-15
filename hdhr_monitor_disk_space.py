@@ -33,7 +33,7 @@ import requests
 import sys
 import threading
 import time
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, ConnectionError
 from json.decoder import JSONDecodeError
 
 DEFAULT_DEVICE_ID = 'discover'
@@ -45,7 +45,8 @@ DEFAULT_WATCHED_OFFSET = 180
 MIN_CHECK_INTERVAL = 3
 MODES = ['report', 'maintain']
 DELETE_POLICIES = ['age', 'category', 'priority']
-DISCOVER_URL = 'https://my.hdhomerun.com/discover'
+GENERIC_LOCAL_URL = 'http://hdhomerun.local/discover.json'
+NETWORK_DISCOVER_URL = 'https://my.hdhomerun.com/discover'
 RULES_URL = 'https://my.hdhomerun.com/api/recording_rules?DeviceAuth='
 MAX_STREAMS = {'HDVR': 4, 'HHDD': 6}
 BYTES_PER_KiB = 1024
@@ -580,66 +581,83 @@ def get_device(device_id):
 
     device_found = False
 
-    response = requests.get(DISCOVER_URL)
-    response.raise_for_status()
-    devices = response.json()
-
-    for device in devices:
-
-        if 'DeviceID' not in device:
-            logger.debug(f'Discovered device at {device["LocalIP"]} has no '
-                         + 'device ID'
-                         )
-            continue
-
-        elif (device_id == 'discover'):
-            if ('StorageID' in device):
-                device_found = True
-                logger.debug('Monitoring discovered device with ID '
-                             + f'{device["DeviceID"]}'
-                             )
-                break
-            else:
-                logger.debug(f'Discovered device {device["DeviceID"]} has no '
-                             'storage'
-                             )
-
-        elif device_id == device['DeviceID']:
-            if ('StorageID' in device):
-                device_found = True
-                logger.debug('Monitoring specified device '
-                             + f'{device["DeviceID"]}'
-                             )
-                break
-            else:
-                logger.debug(f'Specified device {device["DeviceID"]} has no '
-                             'storage'
-                             )
-                break
-
+    # Try to use the .local URLs, first.  But don't count on it since
+    # .local name resolution won't work everywhere. And even if this
+    # works, we'll still have to go to the internet later to get the
+    # recordings. But if it does work, it will minimize required
+    # internet access.
+    try:
+        if device_id == DEFAULT_DEVICE_ID:
+            logger.debug(f'Trying {GENERIC_LOCAL_URL}')
+            response = requests.get(GENERIC_LOCAL_URL)
+            response.raise_for_status()
+            device = response.json()
         else:
-            logger.debug(f'Discovered device {device["DeviceID"]} is not the '
-                         + 'one you are looking for'
-                         )
+            device_local_url = f'http://hdhr-{device_id}.local/discover.json'
+            logger.debug(f'Trying {device_local_url}')
+            response = requests.get(device_local_url)
+            response.raise_for_status()
+            device = response.json()
 
-        # End device_id if
+        device_found = verify_device(device, device_id)
+        if device_found:
+            device['DiscoverURL'] = f"{device['BaseURL']}/discover.json"
 
-    # End devices loop
+    except ConnectionError as conn_err:
+        logger.debug(f"That didn't work: {conn_err}")
+        pass
 
     if not device_found:
-        raise NoDeviceFoundError
+        logger.debug(f'Trying {NETWORK_DISCOVER_URL}')
+        response = requests.get(NETWORK_DISCOVER_URL)
+        response.raise_for_status()
+        devices = response.json()
 
-    refresh_device_data(device)
+        for device in devices:
+            device_found = verify_device(device, device_id)
+            if device_found:
+                refresh_device_data(device)
+                break
+
+        if not device_found:
+            raise NoDeviceFoundError
+
+    # Custom elements
     device['MinimumFreeSpace'] = 0
     device['Tag'] = f'[{device["ModelNumber"]} {device["DeviceID"]}]'
 
-    model = re.match(r'[A-Z]{4}', device['ModelNumber']).group()
-    max_device_streams = (MAX_STREAMS[model])
+    model_family = re.match(r'[A-Z]{4}', device['ModelNumber']).group()
+    max_device_streams = (MAX_STREAMS[model_family])
     device['MaxRecordingBps'] = ATSC_MAX_TUNER_Bps * max_device_streams
 
     return(device)
 
 # End get_device
+
+
+def verify_device(device, requested_device_id):
+
+    device_is_good = True
+
+    if 'DeviceID' not in device:
+        device_is_good = False
+        if 'LocalIP' in device:
+            logger.debug(f'Device at {device["LocalIP"]} has no device ID')
+    else:
+        if ((requested_device_id != DEFAULT_DEVICE_ID)
+                and (device['DeviceID'] != requested_device_id)):
+            device_is_good = False
+            logger.debug(f'Device {device["DeviceID"]} is not the one you are '
+                         'looking for'
+                         )
+
+    if (device_is_good) and ('StorageID' not in device):
+        device_is_good = False
+        logger.debug(f'Device {device["DeviceID"]} has no storage')
+
+    return(device_is_good)
+
+# End verify_device
 
 
 def refresh_device_data(device):
@@ -757,9 +775,14 @@ def print_recording_list(recordings):
 
 def delete_recording(device, delete_policy, watched_first, watched_offset):
 
-    sorted_recordings = get_sorted_recordings(device, delete_policy,
-                                              watched_first, watched_offset
-                                              )
+    try:
+        sorted_recordings = get_sorted_recordings(device, delete_policy,
+                                                  watched_first, watched_offset
+                                                  )
+    except ConnectionError as conn_err:
+        logger.error(f'Failed to get list of recordings: {conn_err}')
+        pass
+
     if len(sorted_recordings) > 0:
         recording = sorted_recordings[0]
         logger.info(f'{device["Tag"]} '
@@ -767,10 +790,16 @@ def delete_recording(device, delete_policy, watched_first, watched_offset):
                     + f'{time.ctime(recording["StartTime"])}',
                     )
 
-        response = requests.post(f'{recording["CmdURL"]}'
-                                 + '&cmd=delete&rerecord=1'
-                                 )
-        response.raise_for_status()
+        try:
+            response = requests.post(f'{recording["CmdURL"]}'
+                                     + '&cmd=delete&rerecord=1'
+                                     )
+            response.raise_for_status()
+
+        except ConnectionError as conn_err:
+            logger.error(f'Failed to delete recording: {conn_err}')
+            pass
+
     else:
         logger.warning(f'{device["Tag"]} No recordings found. Unable to free '
                        + 'more space.')
@@ -873,6 +902,8 @@ def main():
 
         device = get_device(args.device_id)
 
+        logger.debug(f'Monitoring device {device["DeviceID"]}')
+
         if list_recordings:
             print_recording_list(get_sorted_recordings(device, delete_policy,
                                                        watched_first,
@@ -939,6 +970,8 @@ def main():
                 refresh_device_data(device)
                 report_space_utilization(device)
 
+    except ConnectionError as conn_err:
+        logger.error(f'Failed to connect: {conn_err}')
     except HTTPError as http_err:
         logger.error(f'HTTP error occurred: {http_err}')
         sys.exit(2)

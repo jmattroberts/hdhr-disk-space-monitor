@@ -114,7 +114,7 @@ class TestCLISuccess:
     def test_cli_mode_maintain_verbose(self):
 
         args = ['--count', '1', '--mode', 'maintain', '--verbose']
-        expected_output = ["Monitoring discovered device with ID",
+        expected_output = ["Monitoring device",
                            "Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
                            "Running maintenance cycle - checking free space",
                            "Next maintenance cycle in",
