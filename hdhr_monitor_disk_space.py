@@ -677,7 +677,6 @@ def get_sorted_recordings(device, sort_method, watched_first,
                           ):
 
     default_priority = 9999
-    current_streams = []
 
     response = requests.get(device['StorageURL'])
     response.raise_for_status()
@@ -691,9 +690,9 @@ def get_sorted_recordings(device, sort_method, watched_first,
     response.raise_for_status()
     resources = response.json()
 
-    for resource in resources:
-        if resource['Resource'] == 'playback':
-            current_streams.append(resource)
+    current_streams = [resource for resource in resources
+                       if resource['Resource'] == 'playback'
+                       ]
 
     for recording in recordings:
         recording['Playing'] = False
@@ -703,7 +702,7 @@ def get_sorted_recordings(device, sort_method, watched_first,
             if f"{stream['Name']}.mpg" == recording['Filename']:
                 recording['Playing'] = True
 
-        if 'Resume' in recording and not(recording['Playing']):
+        if 'Resume' in recording:
             if recording['Resume'] == MAX_RESUME:
                 recording['Watched'] = True
             else:
@@ -781,7 +780,7 @@ def print_recording_list(recordings):
         msg = f'{time.ctime(recording["StartTime"])}: {recording["Title"]}'
         if recording['Watched']:
             msg += ' (watched)'
-        elif recording['Playing']:
+        if recording['Playing']:
             msg += ' (playing)'
         print(msg)
 
@@ -799,9 +798,11 @@ def delete_recording(device, delete_policy, watched_first, watched_offset):
         pass
 
     if len(sorted_recordings) > 0:
-        for recording in sorted_recordings:
-            if not recording['Playing']:
-                break
+
+        deletable_recordings = [recording for recording in sorted_recordings
+                                if not recording['Playing']
+                                ]
+        recording = deletable_recordings[0]
 
         logger.info(f'{device["Tag"]} '
                     + f'Deleting "{recording["Title"]}" recorded at '
