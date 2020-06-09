@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Allow configuration of maximum recording age or number of recordings per recording rule or series
 - Web UI to maintain configuration
 
+## [1.4.0] - 2020-06-09
+
+### Removed
+
+- "priority" has been removed as a delete policy option. This allows RECORD devices to work in maintain mode.
+
 ## [1.3.0] - 2020-06-08
 
 ### Added

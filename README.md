@@ -52,10 +52,10 @@ The default amount of free space to maintain is 2%. This can be overridden with 
 
 ### Delete Policies
 ```
---delete-policy {age,category,priority}
+--delete-policy {age,category}
 ```
 
-There are 3 delete policies that can be applied to select a recording to be deleted.
+There are 2 delete policies that can be applied to select a recording to be deleted.
 
 * **Age** - (default) The oldest recording is selected
 * **Category** - Recordings are sorted first by category, then by age within category. The oldest recording in the least important category is selected. The categories, in order of increasing importance are:
@@ -64,7 +64,6 @@ There are 3 delete policies that can be applied to select a recording to be dele
   * Sports
   * Movies
   * Specials
-* **Priority** - The recordings are sorted first by recording rule priority, then by age within priority. Recordings that have no associated recording rule are given high priority. The oldest recording with the lowest priority is selected.
 
 ### Watched Recordings
 ```
@@ -89,7 +88,7 @@ No space check or deletion happens when this option is used.
 usage: hdhr_monitor_disk_space.py [-h] [-f FILE] [-d DEVICE_ID|IP|HOSTNAME]
                                   [-V] [-m {report,maintain}] [-i SECONDS]
                                   [-c NUMBER] [-g GIGABYTES | -p PERCENT]
-                                  [-s {age,category,priority}] [-w]
+                                  [-s {age,category}] [-w]
                                   [-o SECONDS] [-l] [-q | -v]
 
 Monitor disk space utilization of one HDHomeRun SCRIBE, SERVIO, or RECORD
@@ -134,15 +133,12 @@ optional arguments:
                         Only applicable in maintain mode. Cannot be used in
                         combination with -g/--gigabytes-free. Default is 2.0,
                         if neither gigabytes or percent are specified.
-  -s {age,category,priority}, --delete-policy {age,category,priority}
+  -s {age,category}, --delete-policy {age,category}
                         Delete policy / sort method. Determines how recordings
                         are sorted when selecting one to delete in maintain
                         mode. "age" sorts only on the age of the recordings.
                         "category" sorts first by category ['news', 'series',
-                        'sport', 'movie', 'special'], then by age. "priority"
-                        sorts first by associated recording rule priority,
-                        then age. If no associated recording rule still exists
-                        for a recording, its priority defaults to high. Use in
+                        'sport', 'movie', 'special'], then by age. Use in
                         combination with -l/--list-recordings to determine
                         which policy works best for your situation. Default is
                         "age".

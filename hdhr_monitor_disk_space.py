@@ -48,7 +48,7 @@ DEFAULT_DELETE_POLICY = 'age'
 DEFAULT_WATCHED_OFFSET = 180
 MIN_CHECK_INTERVAL = 3
 MODES = ['report', 'maintain']
-DELETE_POLICIES = ['age', 'category', 'priority']
+DELETE_POLICIES = ['age', 'category']
 WILDCARD_DEVICE_ID = 'FFFFFFFF'
 WILDCARD_HOST = 'hdhomerun.local'
 API_HOST = 'ipv4-api.hdhomerun.com'
@@ -460,9 +460,6 @@ def parse_args(argv):
       + 'sorted when selecting one to delete in maintain mode. '
       + '"age" sorts only on the age of the recordings. "category" sorts '
       + f'first by category {CATEGORY_PRIORITY}, then by age. '
-      + '"priority" sorts first by associated recording rule priority, then '
-      + 'age. If no associated recording rule still exists for a recording, '
-      + 'its priority defaults to high. '
       + 'Use in combination with -l/--list-recordings to determine which '
       + 'policy works best for your situation. Default is "%(default)s".'
       )
@@ -732,15 +729,9 @@ def get_sorted_recordings(device, sort_method, watched_first,
                           watched_threshold
                           ):
 
-    default_priority = 9999
-
     response = requests.get(device['StorageURL'])
     response.raise_for_status()
     recorded_series = response.json()
-
-    response = requests.get(RECORDING_RULES_URL + device['DeviceAuth'])
-    response.raise_for_status()
-    rules = response.json()
 
     response = requests.get(device['StatusURL'])
     response.raise_for_status()
@@ -803,33 +794,6 @@ def get_sorted_recordings(device, sort_method, watched_first,
                                        key=lambda r: (r['CategoryPriority'],
                                                       r['StartTime']
                                                       ))
-
-    elif sort_method == 'priority':
-
-        for recording in recordings:
-            # Default to highest priority in case no rule is found, or no
-            # priority is given in the rule (i.e., one-off recordings)
-            recording['RulePriority'] = default_priority
-
-            for rule in rules:
-                if rule['SeriesID'] == recording['SeriesID']:
-                    if 'Priority' in rule:
-                        recording['RulePriority'] = rule['Priority']
-
-        # End recordings loop
-
-        if watched_first:
-            sorted_recordings = sorted(recordings,
-                                       key=lambda r: (-r['Watched'],
-                                                      r['RulePriority'],
-                                                      r['StartTime']
-                                                      ))
-        else:
-            sorted_recordings = sorted(recordings,
-                                       key=lambda r: (r['RulePriority'],
-                                                      r['StartTime']
-                                                      ))
-
     # End sort_method if
 
     return(sorted_recordings)

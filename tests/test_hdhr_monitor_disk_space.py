@@ -194,17 +194,6 @@ class TestCLISuccess:
         self.run_cli_test(args, expected_output)
 
 
-    def test_cli_delete_policy_priority(self):
-
-        args = ['--count', '1', '--mode', 'maintain', '--delete-policy', 'priority']
-        expected_output = ["Recordings will be deleted according to priority to maintain minimum free space of 2.0%.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
-                           "Total: ",
-                           "Minimum Free: "
-                           ]
-        self.run_cli_test(args, expected_output)
-
-
     def test_cli_delete_watched_first(self):
 
         args = ['--count', '1', '--mode', 'maintain', '--watched-first']
@@ -643,20 +632,6 @@ class TestConfSuccess:
                 b'delete_policy = category\n',
                 ]
         expected_output = ["Recordings will be deleted according to category to maintain minimum free space of 2.0%.",
-                           "Disk space utilization will be reported every 10 minutes",
-                           "Total: ",
-                           "Minimum Free: "
-                           ]
-        self.run_conf_test(conf, expected_output=expected_output)
-
-
-    def test_conf_delete_policy_priority(self):
-
-        conf = [b'[DEFAULT]\n',
-                b'mode = maintain\n',
-                b'delete_policy = priority\n',
-                ]
-        expected_output = ["Recordings will be deleted according to priority to maintain minimum free space of 2.0%.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
