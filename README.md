@@ -1,5 +1,5 @@
 # hdhr-disk-space-monitor
-Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device. Optionally delete recordings to stay above a specified minimum free space.
+Monitor disk space utilization of one HDHomeRun SCRIBE, SERVIO, or RECORD device. Optionally delete recordings to stay above a specified minimum free space.
 
 
 # Device Selection
@@ -7,7 +7,7 @@ Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device. Optiona
 --device discover
 ```
 
-Each instance of the monitor will monitor only one device. By default, devices are discovered on the local network and the first one found with a StorageID is monitored. Optionally, a specific device ID can be passed to the monitor.
+Each instance of the monitor will monitor only one device. By default, devices are discovered on the local network and the first one found with a StorageID is monitored. Optionally, a specific device ID, IP address, or hostname can be passed to the monitor.
 
 # Modes of Operation
 
@@ -86,14 +86,15 @@ No space check or deletion happens when this option is used.
 # Usage Guide
 
 ```
-usage: hdhr_monitor_disk_space.py [-h] [-f FILE] [-d DEVICE_ID]
-                                  [-m {report,maintain}] [-i SECONDS]
+usage: hdhr_monitor_disk_space.py [-h] [-f FILE] [-d DEVICE_ID|IP|HOSTNAME]
+                                  [-V] [-m {report,maintain}] [-i SECONDS]
                                   [-c NUMBER] [-g GIGABYTES | -p PERCENT]
                                   [-s {age,category,priority}] [-w]
                                   [-o SECONDS] [-l] [-q | -v]
 
-Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device.
-Optionally delete recordings to stay above a specified free space minimum.
+Monitor disk space utilization of one HDHomeRun SCRIBE, SERVIO, or RECORD
+device. Optionally delete recordings to stay above a specified free space
+minimum.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -104,10 +105,12 @@ optional arguments:
                         are applied when a device ID is specified using
                         -d/--device-id. Options given on the command-line
                         override those in the configuration file.
-  -d DEVICE_ID, --device-id DEVICE_ID
-                        ID of device to monitor. Default is "discover" which
-                        discovers devices on the local network and monitors
-                        the first device found with a StorageID.
+  -d DEVICE_ID|IP|HOSTNAME, --device-id DEVICE_ID|IP|HOSTNAME
+                        ID, IP address, or hostname of device to monitor.
+                        Default is "discover" which discovers devices on the
+                        local network and monitors the first device found with
+                        a StorageID.
+  -V, --version         Show version number and exit.
   -m {report,maintain}, --mode {report,maintain}
                         Mode of operation. "report" mode reports disk space
                         utilization periodically. "maintain" mode reports disk
@@ -123,9 +126,9 @@ optional arguments:
                         Number of space utilization reports to print before
                         stopping. Default is to continue forever.
   -g GIGABYTES, --gigabytes-free GIGABYTES
-                        Minimum number of free gigabytes (GiB) of disk space
-                        to maintain. Only applicable in maintain mode. Cannot
-                        be used in combination with -p/--percent-free.
+                        Minimum number of free gigabytes (GB) of disk space to
+                        maintain. Only applicable in maintain mode. Cannot be
+                        used in combination with -p/--percent-free.
   -p PERCENT, --percent-free PERCENT
                         Minimum percentage of free disk space to maintain.
                         Only applicable in maintain mode. Cannot be used in

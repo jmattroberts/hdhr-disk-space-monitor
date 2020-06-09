@@ -14,13 +14,13 @@ class TestFunctions:
         assert hdhr_monitor_disk_space.binarysize(0) == '0.00 B'
         assert hdhr_monitor_disk_space.binarysize(0,0) == '0 B'
         assert hdhr_monitor_disk_space.binarysize(373,0) == '373 B'
-        assert hdhr_monitor_disk_space.binarysize(1024) == '1.00 KiB'
-        assert hdhr_monitor_disk_space.binarysize(1024 * 1.5,1) == '1.5 KiB'
-        assert hdhr_monitor_disk_space.binarysize(1024 * 678,1) == '678.0 KiB'
-        assert hdhr_monitor_disk_space.binarysize(1024**2) == '1.00 MiB'
-        assert hdhr_monitor_disk_space.binarysize(1024**2 * 5.25) == '5.25 MiB'
-        assert hdhr_monitor_disk_space.binarysize(1024**3 * 837.33333) == '837.33 GiB'
-        assert hdhr_monitor_disk_space.binarysize(1024**4 * 37.376) == '37.38 TiB'
+        assert hdhr_monitor_disk_space.binarysize(10**3) == '1.00 KB'
+        assert hdhr_monitor_disk_space.binarysize(10**3 * 1.5,1) == '1.5 KB'
+        assert hdhr_monitor_disk_space.binarysize(10**3 * 678,1) == '678.0 KB'
+        assert hdhr_monitor_disk_space.binarysize(10**6) == '1.00 MB'
+        assert hdhr_monitor_disk_space.binarysize(10**6 * 5.25) == '5.25 MB'
+        assert hdhr_monitor_disk_space.binarysize(10**9 * 837.33333) == '837.33 GB'
+        assert hdhr_monitor_disk_space.binarysize(10**12 * 37.376) == '37.38 TB'
 
 
     def test_duration(self):
@@ -78,7 +78,7 @@ class TestCLISuccess:
     def test_cli_help(self):
 
         args = ['--help']
-        expected_output = ["Monitor disk space utilization of one HDHomeRun SCRIBE or SERVIO device."]
+        expected_output = ["Monitor disk space utilization of one HDHomeRun SCRIBE, SERVIO, or RECORD"]
         self.run_cli_test(args, expected_output)
 
 
@@ -153,7 +153,7 @@ class TestCLISuccess:
     def test_cli_gigabytes_free_5(self):
 
         args = ['--count', '1', '--mode', 'maintain', '--gigabytes-free', '5']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.00 GiB.",
+        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.00 GB.",
                            "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
                            "Total: ",
                            "Minimum Free: "
@@ -161,10 +161,10 @@ class TestCLISuccess:
         self.run_cli_test(args, expected_output)
 
 
-    def test_cli_percent_free_5(self):
+    def test_cli_percent_free_1(self):
 
-        args = ['--count', '1', '--mode', 'maintain', '--percent-free', '5']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.0%.",
+        args = ['--count', '1', '--mode', 'maintain', '--percent-free', '1']
+        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 1.0%.",
                            "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
                            "Total: ",
                            "Minimum Free: "
@@ -279,16 +279,18 @@ class TestCLIFailure:
 
     def test_cli_device_bad(self):
 
-        args = ['--count', '1', '--device-id', 'FFFFFFFF']
-        expected_stderr = ['ERROR No device found to monitor. Run with "--verbose" for more information.']
+        args = ['--count', '1', '--device-id', 'AAAAAAAA']
+        expected_stderr = ['ERROR No device found to monitor']
         self.run_cli_test(args, expected_stderr)
 
 
     def test_cli_device_bad_verbose(self):
 
-        args = ['--count', '1', '--device-id', 'FFFFFFFF', '--verbose']
+        args = ['--count', '1', '--device-id', 'AAAAAAAA', '--verbose']
         expected_stderr = ['ERROR No device found to monitor']
-        expected_stdout = ['is not the one you are looking for']
+        expected_stdout = ['Bad hostname or device ID',
+                           'Trying https://ipv4-api.hdhomerun.com/discover'
+                           ]
         self.run_cli_test(args, expected_stderr, expected_stdout)
 
 
@@ -449,8 +451,8 @@ class TestCLIFailure:
 
     def test_huge_gigabytes_free(self):
 
-        args = ['--count', '1', '--mode', 'maintain', '--gigabytes-free', '102400']
-        expected_stderr = ["ERROR Minimum free space (100.00 TiB) cannot be greater than device"]
+        args = ['--count', '1', '--mode', 'maintain', '--gigabytes-free', '100000']
+        expected_stderr = ["ERROR Minimum free space (100.00 TB) cannot be greater than device"]
         self.run_cli_test(args, expected_stderr)
 
 
@@ -555,7 +557,7 @@ class TestConfSuccess:
                 b'mode = maintain\n',
                 b'gigabytes_free = 5\n',
                 ]
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.00 GiB.",
+        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.00 GB.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -577,13 +579,13 @@ class TestConfSuccess:
         self.run_conf_test(conf, expected_output=expected_output)
 
 
-    def test_conf_percent_free_5(self):
+    def test_conf_percent_free_1(self):
 
         conf = [b'[DEFAULT]\n',
                 b'mode = maintain\n',
-                b'percent_free = 5\n',
+                b'percent_free = 1\n',
                 ]
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.0%.",
+        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 1.0%.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "

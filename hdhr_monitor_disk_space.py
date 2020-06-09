@@ -28,14 +28,18 @@ import argparse
 import configparser
 import logging
 import math
+import os
 import re
 import requests
+import socket
 import sys
 import threading
 import time
+from pathlib import Path
 from requests.exceptions import HTTPError, ConnectionError
 from json.decoder import JSONDecodeError
 
+VERSION = '1.3.0'
 DEFAULT_DEVICE_ID = 'discover'
 DEFAULT_MODE = 'report'
 DEFAULT_REPORT_INTERVAL = 600
@@ -45,14 +49,20 @@ DEFAULT_WATCHED_OFFSET = 180
 MIN_CHECK_INTERVAL = 3
 MODES = ['report', 'maintain']
 DELETE_POLICIES = ['age', 'category', 'priority']
-GENERIC_LOCAL_URL = 'http://hdhomerun.local/discover.json'
-NETWORK_DISCOVER_URL = 'https://my.hdhomerun.com/discover'
-RULES_URL = 'https://my.hdhomerun.com/api/recording_rules?DeviceAuth='
-MAX_STREAMS = {'HDVR': 4, 'HHDD': 6}
-BYTES_PER_KiB = 1024
-BYTES_PER_MiB = 1024**2
-BYTES_PER_GiB = 1024**3
-BYTES_PER_TiB = 1024**4
+WILDCARD_DEVICE_ID = 'FFFFFFFF'
+WILDCARD_HOST = 'hdhomerun.local'
+API_HOST = 'ipv4-api.hdhomerun.com'
+API_DISCOVER_URL = f'https://{API_HOST}/discover'
+RECORDING_RULES_URL = f'https://{API_HOST}/api/recording_rules?DeviceAuth='
+MAX_STREAMS = {'HDVR': 4, 'HHDD': 6, 'RECORD': 16}
+BYTES_PER_KiB = 2**10
+BYTES_PER_MiB = 2**20
+BYTES_PER_GiB = 2**30
+BYTES_PER_TiB = 2**40
+BYTES_PER_KB = 10**3
+BYTES_PER_MB = 10**6
+BYTES_PER_GB = 10**9
+BYTES_PER_TB = 10**12
 
 # When a recording has been watched all the way to the end, the Resume
 # value is set to this constant.
@@ -252,18 +262,18 @@ def binarysize(bytes, digits=2):
 
     fmt = '{:.' + str(digits) + 'f}'
 
-    if bytes >= BYTES_PER_TiB:
-        fmt = fmt + ' TiB'
-        divisor = BYTES_PER_TiB
-    elif bytes >= BYTES_PER_GiB:
-        fmt = fmt + ' GiB'
-        divisor = BYTES_PER_GiB
-    elif bytes >= BYTES_PER_MiB:
-        fmt = fmt + ' MiB'
-        divisor = BYTES_PER_MiB
-    elif bytes >= BYTES_PER_KiB:
-        fmt = fmt + ' KiB'
-        divisor = BYTES_PER_KiB
+    if bytes >= BYTES_PER_TB:
+        fmt = fmt + ' TB'
+        divisor = BYTES_PER_TB
+    elif bytes >= BYTES_PER_GB:
+        fmt = fmt + ' GB'
+        divisor = BYTES_PER_GB
+    elif bytes >= BYTES_PER_MB:
+        fmt = fmt + ' MB'
+        divisor = BYTES_PER_MB
+    elif bytes >= BYTES_PER_KB:
+        fmt = fmt + ' KB'
+        divisor = BYTES_PER_KB
     else:
         fmt = fmt + ' B'
         divisor = 1
@@ -376,16 +386,22 @@ def parse_args(argv):
 
     conf_parser.add_argument(
       '-d', '--device-id', default=DEFAULT_DEVICE_ID,
-      help='ID of device to monitor. Default is "' + DEFAULT_DEVICE_ID
-      + '" which discovers devices on the local network and monitors the '
-      + 'first device found with a StorageID.'
+      metavar='DEVICE_ID|IP|HOSTNAME',
+      help='ID, IP address, or hostname of device to monitor. Default is "'
+      + DEFAULT_DEVICE_ID + '" which discovers devices on the local network '
+      + 'and monitors the first device found with a StorageID.'
+      )
+
+    conf_parser.add_argument(
+      '-V', '--version', action='store_true',
+      help='Show version number and exit.'
       )
 
     parser = argparse.ArgumentParser(
                parents=[conf_parser],
                description='Monitor disk space utilization of one '
-               + 'HDHomeRun SCRIBE or SERVIO device.  Optionally delete '
-               + 'recordings to stay above a specified free space '
+               + 'HDHomeRun SCRIBE, SERVIO, or RECORD device.  Optionally '
+               + 'delete recordings to stay above a specified free space '
                + 'minimum.',
                epilog='The interval for free space checks in maintain mode '
                + 'is independent from the interval for disk utilization '
@@ -425,7 +441,7 @@ def parse_args(argv):
 
     threshold_group.add_argument(
       '-g', '--gigabytes-free', metavar='GIGABYTES', type=gigabytes_free,
-      help='Minimum number of free gigabytes (GiB) of disk space to maintain. '
+      help='Minimum number of free gigabytes (GB) of disk space to maintain. '
       + 'Only applicable in maintain mode. Cannot be used in combination with '
       + '-p/--percent-free.'
       )
@@ -489,6 +505,9 @@ def parse_args(argv):
 
     # Try to pull a config file and device ID off the command-line first
     args, remaining_argv = conf_parser.parse_known_args(argv)
+
+    if args.version:
+        return (args)
 
     if args.conf_file is not None:
         # defaults comes back modified with config file settings
@@ -570,7 +589,6 @@ def parse_conf(conf_file, device_id, defaults):
         if (defaults['gigabytes_free'] is None
                 and defaults['percent_free'] is None):
             defaults['percent_free'] = DEFAULT_THRESHOLD_PCT
-
     except ValueError as e:
         raise ValueError(f'Configuration file {conf_file.name}: {str(e)}')
 
@@ -580,36 +598,45 @@ def parse_conf(conf_file, device_id, defaults):
 def get_device(device_id):
 
     device_found = False
+    device_id_pattern = re.compile(r'^[0-9A-F]{8}$', re.IGNORECASE)
+    model_number_pattern = re.compile(r'(?P<family>[A-Z]{4})-(?P<version>.*)')
+    friendly_name_pattern = re.compile(r'HDHomeRun (?P<family>.*)')
+    local_ip_pattern = re.compile(r'(?P<ip_addr>[^:]+)(?P<port>(:|\d+))')
 
     # Try to use the .local URLs, first.  But don't count on it since
     # .local name resolution won't work everywhere. And even if this
     # works, we'll still have to go to the internet later to get the
     # recordings. But if it does work, it will minimize required
     # internet access.
+    if device_id.upper() == WILDCARD_DEVICE_ID.upper():
+        host = WILDCARD_HOST
+    elif device_id_pattern.match(device_id):
+        host = f'hdhr-{device_id}.local'
+    else:
+        host = device_id
+
     try:
-        if device_id == DEFAULT_DEVICE_ID:
-            logger.debug(f'Trying {GENERIC_LOCAL_URL}')
-            response = requests.get(GENERIC_LOCAL_URL)
-            response.raise_for_status()
-            device = response.json()
-        else:
-            device_local_url = f'http://hdhr-{device_id}.local/discover.json'
-            logger.debug(f'Trying {device_local_url}')
-            response = requests.get(device_local_url)
-            response.raise_for_status()
-            device = response.json()
+        socket.gethostbyname(host)
+        url = f'http://{host}/discover.json'
+        logger.debug(f'Trying {url}')
+        response = requests.get(url)
+        response.raise_for_status()
+        device = response.json()
 
         device_found = verify_device(device, device_id)
         if device_found:
             device['DiscoverURL'] = f"{device['BaseURL']}/discover.json"
 
+    except socket.gaierror:
+        logger.debug(f'Bad hostname or device ID: {host}')
+        pass
     except ConnectionError as conn_err:
         logger.debug(f"That didn't work: {conn_err}")
         pass
 
     if not device_found:
-        logger.debug(f'Trying {NETWORK_DISCOVER_URL}')
-        response = requests.get(NETWORK_DISCOVER_URL)
+        logger.debug(f'Trying {API_DISCOVER_URL}')
+        response = requests.get(API_DISCOVER_URL)
         response.raise_for_status()
         devices = response.json()
 
@@ -619,15 +646,31 @@ def get_device(device_id):
                 refresh_device_data(device)
                 break
 
-        if not device_found:
-            raise NoDeviceFoundError
+    if not device_found:
+        raise NoDeviceFoundError
 
     # Custom elements
     device['StatusURL'] = f"{device['BaseURL']}/status.json"
     device['MinimumFreeSpace'] = 0
-    device['Tag'] = f"[{device['ModelNumber']} {device['DeviceID']}]"
+    if 'ModelNumber' in device:
+        device['Tag'] = f"[{device['ModelNumber']} "
+        m = model_number_pattern.match(device['ModelNumber'])
+        model_family = m.group('family')
+    else:
+        m = friendly_name_pattern.match(device['FriendlyName'])
+        model_family = m.group('family')
+        device['Tag'] = f'[{model_family} '
 
-    model_family = re.match(r'[A-Z]{4}', device['ModelNumber']).group()
+    if device_id.upper() == WILDCARD_DEVICE_ID.upper():
+        if 'DeviceID' in device:
+            device['Tag'] += f'{device["DeviceID"]}'
+        elif 'LocalIP' in device:
+            m = local_ip_pattern.match(device['LocalIP'])
+            device['Tag'] += f'{m.group("ip_addr")}'
+    else:
+        device['Tag'] += f'{device_id}'
+
+    device['Tag'] += ']'
     max_device_streams = (MAX_STREAMS[model_family])
     device['MaxRecordingBps'] = ATSC_MAX_TUNER_Bps * max_device_streams
 
@@ -638,19 +681,32 @@ def get_device(device_id):
 
 def verify_device(device, requested_device_id):
 
-    device_is_good = True
+    device_is_good = False
 
-    if 'DeviceID' not in device:
-        device_is_good = False
-        if 'LocalIP' in device:
-            logger.debug(f'Device at {device["LocalIP"]} has no device ID')
-    else:
-        if ((requested_device_id != DEFAULT_DEVICE_ID)
-                and (device['DeviceID'] != requested_device_id)):
-            device_is_good = False
-            logger.debug(f'Device {device["DeviceID"]} is not the one you are '
-                         'looking for'
-                         )
+    if requested_device_id.upper() == WILDCARD_DEVICE_ID.upper():
+        device_is_good = True
+
+    if not device_is_good and 'DeviceID' in device:
+        if device['DeviceID'].upper() == requested_device_id.upper():
+            device_is_good = True
+
+    if not device_is_good and (('LocalIP' in device) or ('BaseURL' in device)):
+        try:
+            requested_device_ip_addr = socket.gethostbyname(
+                                         requested_device_id
+                                         )
+            local_ip_pattern = re.compile(requested_device_ip_addr
+                                          + r'($|:\d+)'
+                                          )
+            if 'LocalIP' in device:
+                if local_ip_pattern.match(device['LocalIP']):
+                    device_is_good = True
+            elif 'BaseURL' in device:
+                if local_ip_pattern.search(device['BaseURL']):
+                    device_is_good = True
+
+        except socket.gaierror:
+            pass
 
     if (device_is_good) and ('StorageID' not in device):
         device_is_good = False
@@ -680,9 +736,9 @@ def get_sorted_recordings(device, sort_method, watched_first,
 
     response = requests.get(device['StorageURL'])
     response.raise_for_status()
-    recordings = response.json()
+    recorded_series = response.json()
 
-    response = requests.get(RULES_URL + device['DeviceAuth'])
+    response = requests.get(RECORDING_RULES_URL + device['DeviceAuth'])
     response.raise_for_status()
     rules = response.json()
 
@@ -694,12 +750,19 @@ def get_sorted_recordings(device, sort_method, watched_first,
                        if resource['Resource'] == 'playback'
                        ]
 
+    recordings = []
+    for series in recorded_series:
+        response = requests.get(series['EpisodesURL'])
+        response.raise_for_status()
+        series_recordings = response.json()
+        recordings.extend(series_recordings)
+
     for recording in recordings:
         recording['Playing'] = False
         recording['Watched'] = False
 
         for stream in current_streams:
-            if f"{stream['Name']}.mpg" == recording['Filename']:
+            if f"{stream['Name']}" == Path(recording['Filename']).stem:
                 recording['Playing'] = True
 
         if 'Resume' in recording:
@@ -902,13 +965,17 @@ def main():
 
         args = parse_args(sys.argv[1:])
 
+        if args.version:
+            print(f'{os.path.basename(sys.argv[0])} {VERSION}')
+            sys.exit()
+
         quiet = args.quiet
         verbose = args.verbose
         mode = args.mode
         report_interval = args.interval
         report_count_limit = args.count
         delete_policy = args.delete_policy
-        threshold_gib = args.gigabytes_free
+        threshold_gb = args.gigabytes_free
         threshold_pct = args.percent_free
         watched_first = args.watched_first
         watched_offset = args.watched_offset
@@ -919,9 +986,14 @@ def main():
         if verbose:
             logger.setLevel(logging.DEBUG)
 
-        device = get_device(args.device_id)
+        if args.device_id.upper() in [DEFAULT_DEVICE_ID.upper(),
+                                      WILDCARD_HOST.upper()
+                                      ]:
+            device = get_device(WILDCARD_DEVICE_ID)
+        else:
+            device = get_device(args.device_id)
 
-        logger.debug(f'Monitoring device {device["DeviceID"]}')
+        logger.debug(f'Monitoring device {device["Tag"]}')
 
         if list_recordings:
             print_recording_list(get_sorted_recordings(device, delete_policy,
@@ -935,20 +1007,20 @@ def main():
 
         if mode == 'maintain':
 
-            if threshold_gib is None:
+            if threshold_gb is None:
                 device['MinimumFreeSpace'] = (device['TotalSpace']
                                               * (threshold_pct / 100)
                                               )
                 threshold_str = f'{threshold_pct:.1f}%'
             else:
-                device['MinimumFreeSpace'] = threshold_gib * BYTES_PER_GiB
+                device['MinimumFreeSpace'] = threshold_gb * BYTES_PER_GB
                 threshold_str = binarysize(device['MinimumFreeSpace'])
 
             if device['MinimumFreeSpace'] > device['TotalSpace']:
                 raise ValueError(
                   'Minimum free space '
                   + f'({binarysize(device["MinimumFreeSpace"])}) '
-                  + f'cannot be greater than device {device["DeviceID"]} '
+                  + f'cannot be greater than device {device["Tag"]} '
                   + f'total space ({binarysize(device["TotalSpace"])})'
                   )
 
@@ -1002,8 +1074,6 @@ def main():
         sys.exit(2)
     except NoDeviceFoundError:
         msg = 'No device found to monitor'
-        if not verbose:
-            msg += '. Run with "--verbose" for more information.'
         logger.error(msg)
         sys.exit(2)
     except KeyboardInterrupt:
