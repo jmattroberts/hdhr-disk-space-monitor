@@ -17,7 +17,7 @@ percent-free = 5
 delete_policy = category
 watched_first = yes
 
-[14253647]
+[192.168.1.100]
 mode = maintain
 gigabytes_free = 20
 delete_policy = age

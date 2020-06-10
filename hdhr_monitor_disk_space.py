@@ -25,6 +25,7 @@
 # -----------------------------------------------------------------------------
 
 import argparse
+import collections.abc
 import configparser
 import logging
 import math
@@ -39,19 +40,29 @@ from pathlib import Path
 from requests.exceptions import HTTPError, ConnectionError
 from json.decoder import JSONDecodeError
 
-VERSION = '1.3.0'
-DEFAULT_DEVICE_ID = 'discover'
-DEFAULT_MODE = 'report'
-DEFAULT_REPORT_INTERVAL = 600
-DEFAULT_THRESHOLD_PCT = 2.0
-DEFAULT_DELETE_POLICY = 'age'
-DEFAULT_WATCHED_OFFSET = 180
-MIN_CHECK_INTERVAL = 3
-MODES = ['report', 'maintain']
-DELETE_POLICIES = ['age', 'category']
+VERSION = '1.5.0'
+DISCOVER_DEVICE_ID = 'discover'
 WILDCARD_DEVICE_ID = 'FFFFFFFF'
 WILDCARD_HOST = 'hdhomerun.local'
-API_HOST = 'ipv4-api.hdhomerun.com'
+MODES = ['report', 'maintain']
+DELETE_POLICIES = ['age', 'category']
+DEFAULT_DEVICE_ID = DISCOVER_DEVICE_ID
+DEFAULT_MODE = MODES[0]
+DEFAULT_REPORT_INTERVAL = 600
+DEFAULT_THRESHOLD_PCT = 2.0
+DEFAULT_DELETE_POLICY = DELETE_POLICIES[0]
+DEFAULT_WATCHED_OFFSET = 180
+DEFAULT_SETTINGS = {'mode': DEFAULT_MODE,
+                    'interval': DEFAULT_REPORT_INTERVAL,
+                    'count': None,
+                    'delete_policy': DEFAULT_DELETE_POLICY,
+                    'gigabytes_free': None,
+                    'percent_free': None,
+                    'watched_first': False,
+                    'watched_offset': DEFAULT_WATCHED_OFFSET
+                    }
+MIN_CHECK_INTERVAL = 3
+API_HOST = 'api.hdhomerun.com'
 API_DISCOVER_URL = f'https://{API_HOST}/discover'
 RECORDING_RULES_URL = f'https://{API_HOST}/api/recording_rules?DeviceAuth='
 MAX_STREAMS = {'HDVR': 4, 'HHDD': 6, 'RECORD': 16}
@@ -83,6 +94,39 @@ ATSC_MAX_TUNER_Bps = (ATSC_MAX_TUNER_Mbps / 8) * BYTES_PER_MiB
 
 logger = None
 t_lock = threading.Lock()
+run_event = threading.Event()
+
+
+class DuplicateDeviceError(Exception):
+
+    # Constructor or Initializer
+    def __init__(self, value=None):
+        if value is None:
+            value = ''
+        else:
+            self.value = value
+
+    # __str__ is to print() the value
+    def __str__(self):
+        return(repr(self.value))
+
+# End NoDeviceFoundError
+
+
+class DeviceNotFoundError(Exception):
+
+    # Constructor or Initializer
+    def __init__(self, value=None):
+        if value is None:
+            value = ''
+        else:
+            self.value = value
+
+    # __str__ is to print() the value
+    def __str__(self):
+        return(repr(self.value))
+
+# End NoDeviceFoundError
 
 
 class NoDeviceFoundError(Exception):
@@ -101,6 +145,20 @@ class NoDeviceFoundError(Exception):
 # End NoDeviceFoundError
 
 
+class NoDeviceStorageError(Exception):
+
+    # Constructor or Initializer
+    def __init__(self, value=None):
+        if value is None:
+            value = ''
+        else:
+            self.value = value
+
+    # __str__ is to print() the value
+    def __str__(self):
+        return(repr(self.value))
+
+
 class LessThanFilter(logging.Filter):
 
     def __init__(self, exclusive_maximum, name=""):
@@ -108,7 +166,7 @@ class LessThanFilter(logging.Filter):
         self.max_level = exclusive_maximum
 
     def filter(self, record):
-        return 1 if record.levelno < self.max_level else 0
+        return(1 if record.levelno < self.max_level else 0)
 
 # End LessThanFilter
 
@@ -125,9 +183,32 @@ class CustomFormatter(logging.Formatter):
 
     def format(self, record):
         formatter = logging.Formatter(self.FORMATS.get(record.levelno))
-        return formatter.format(record)
+        return(formatter.format(record))
 
 # End CustomFormatter
+
+
+class CaseInsensitiveDict(collections.abc.MutableMapping):
+    """ Ordered case insensitive mutable mapping class. """
+    def __init__(self, *args, **kwargs):
+        self._d = collections.OrderedDict(*args, **kwargs)
+        self._convert_keys()
+    def _convert_keys(self):
+        for k in list(self._d.keys()):
+            v = self._d.pop(k)
+            self._d.__setitem__(k, v)
+    def __len__(self):
+        return len(self._d)
+    def __iter__(self):
+        return iter(self._d)
+    def __setitem__(self, k, v):
+        self._d[k.lower()] = v
+    def __getitem__(self, k):
+        return self._d[k.lower()]
+    def __delitem__(self, k):
+        del self._d[k.lower()]
+
+# End CaseInsensitiveDict
 
 
 def mode(string):
@@ -140,7 +221,8 @@ def mode(string):
 def validate_mode(string):
 
     try:
-        mode(string)
+        value = mode(string)
+        return(value)
     except Exception:
         raise ValueError(f'invalid mode value: {string!r}')
 
@@ -153,13 +235,14 @@ def interval(string):
         raise ValueError()
     if (value <= 0):
         raise ValueError()
-    return value
+    return(value)
 
 
 def validate_interval(string):
 
     try:
-        interval(string)
+        value = interval(string)
+        return(value)
     except Exception:
         raise ValueError(f'invalid interval value: {string!r}')
 
@@ -172,14 +255,17 @@ def count(string):
         raise ValueError()
     if (value < 0):
         raise ValueError()
-    return value
+    return(value)
 
 
 def validate_count(string):
 
     try:
-        if string is not None:
-            count(string)
+        if string is None or string == '':
+            return(None)
+        else:
+            value = count(string)
+            return(value)
     except Exception:
         raise ValueError(f'invalid count value: {string!r}')
 
@@ -194,7 +280,8 @@ def delete_policy(string):
 def validate_delete_policy(string):
 
     try:
-        delete_policy(string)
+        value = delete_policy(string)
+        return(value)
     except Exception:
         raise ValueError(f'invalid delete_policy value: {string!r}')
 
@@ -207,14 +294,17 @@ def gigabytes_free(string):
         raise ValueError()
     if (value <= 0):
         raise ValueError()
-    return value
+    return(value)
 
 
 def validate_gigabytes_free(string):
 
     try:
-        if string is not None:
-            gigabytes_free(string)
+        if string is None or string == '':
+            return(None)
+        else:
+            value = gigabytes_free(string)
+            return(value)
     except Exception:
         raise ValueError(f'invalid gigabytes_free value: {string!r}')
 
@@ -227,14 +317,17 @@ def percent_free(string):
         raise ValueError()
     if (value <= 0) or (value >= 100):
         raise ValueError()
-    return value
+    return(value)
 
 
 def validate_percent_free(string):
 
     try:
-        if string is not None:
-            percent_free(string)
+        if string is None or string == '':
+            return(None)
+        else:
+            value = percent_free(string)
+            return(value)
     except Exception:
         raise ValueError(f'invalid percent_free value: {string!r}')
 
@@ -247,13 +340,14 @@ def watched_offset(string):
         raise ValueError()
     if (value < 0):
         raise ValueError()
-    return value
+    return(value)
 
 
 def validate_watched_offset(string):
 
     try:
-        watched_offset(string)
+        value = watched_offset(string)
+        return(value)
     except Exception:
         raise ValueError(f'invalid watched_offset value: {string!r}')
 
@@ -290,7 +384,7 @@ def duration(seconds):
     DAY_SECONDS = HOUR_SECONDS * 24
 
     duration_text = ''
-    remaining_seconds = seconds
+    remaining_seconds = int(seconds)
 
     if remaining_seconds == 0:
         duration_text += f'{remaining_seconds} seconds'
@@ -360,47 +454,9 @@ def configure_loggers():
 
 def parse_args(argv):
 
-    defaults = {'mode': DEFAULT_MODE,
-                'interval': DEFAULT_REPORT_INTERVAL,
-                'count': None,
-                'delete_policy': DEFAULT_DELETE_POLICY,
-                'gigabytes_free': None,
-                'percent_free': DEFAULT_THRESHOLD_PCT,
-                'watched_first': False,
-                'watched_offset': DEFAULT_WATCHED_OFFSET,
-                'list_recordings': False,
-                'verbose': False,
-                'quiet': False
-                }
-
-    conf_parser = argparse.ArgumentParser(add_help=False)
-
-    conf_parser.add_argument(
-      '-f', '--conf-file', metavar='FILE', type=argparse.FileType('r'),
-      help='Path to configuration file. The configuration file supports '
-      + 'overriding the built-in defaults, as well as per-device settings. '
-      + 'See example. Per-device settings are applied when a device '
-      + 'ID is specified using -d/--device-id. Options given on the '
-      + 'command-line override those in the configuration file.'
-      )
-
-    conf_parser.add_argument(
-      '-d', '--device-id', default=DEFAULT_DEVICE_ID,
-      metavar='DEVICE_ID|IP|HOSTNAME',
-      help='ID, IP address, or hostname of device to monitor. Default is "'
-      + DEFAULT_DEVICE_ID + '" which discovers devices on the local network '
-      + 'and monitors the first device found with a StorageID.'
-      )
-
-    conf_parser.add_argument(
-      '-V', '--version', action='store_true',
-      help='Show version number and exit.'
-      )
-
     parser = argparse.ArgumentParser(
-               parents=[conf_parser],
-               description='Monitor disk space utilization of one '
-               + 'HDHomeRun SCRIBE, SERVIO, or RECORD device.  Optionally '
+               description='Monitor disk space utilization of one or more '
+               + 'HDHomeRun SCRIBE, SERVIO, and/or RECORD devices. Optionally '
                + 'delete recordings to stay above a specified free space '
                + 'minimum.',
                epilog='The interval for free space checks in maintain mode '
@@ -409,12 +465,29 @@ def parse_args(argv):
                + 'background at an interval based on the amount of free space '
                + 'found during the last check. If there is a lot of space '
                + 'available, it will be a long time - maybe many hours - '
-               + 'before the next check. If there is little free space '
+               + 'until the next check. If there is little free space '
                + 'available, it might be only a few seconds until the next '
                + 'check. This can be observed with verbose output enabled '
                + '(-v/--verbose).'
                )
-    parser.set_defaults(**defaults)
+
+    parser.add_argument(
+      '-d', '--device-id', action='extend', nargs="+", type=str,
+      dest='device_list', metavar='DEVICE_ID|IP|HOSTNAME|ALL',
+      help='ID, IP address, or hostname of device(s) to monitor. Default is '
+      + f'"{DEFAULT_DEVICE_ID}" which discovers devices on the local network '
+      + 'and monitors the first device found with a StorageID. If "ALL" is '
+      + 'specified, then all devices found with StorageID will be monitored.'
+      )
+
+    parser.add_argument(
+      '-f', '--conf-file', metavar='FILE', type=argparse.FileType('r'),
+      help='Path to configuration file. The configuration file supports '
+      + 'overriding the built-in defaults, as well as per-device settings. '
+      + 'See example. Per-device settings are applied when a device '
+      + 'ID is specified using -d/--device-id. Options given on the '
+      + 'command-line override those in the configuration file.'
+      )
 
     parser.add_argument(
       '-m', '--mode', choices=MODES, type=mode,
@@ -422,19 +495,21 @@ def parse_args(argv):
       + 'periodically. "maintain" mode reports disk space utilization, and '
       + 'also maintains a minimum amount of free space by deleting recordings '
       + 'when less than the minimum amount of free space is available. '
-      + 'Deleted recordings are set to record again. Default is "%(default)s".'
+      + 'Deleted recordings are set to record again. Default is '
+      + f'"{DEFAULT_MODE}".'
       )
 
     parser.add_argument(
       '-i', '--interval', metavar='SECONDS', type=interval,
       help='Number of seconds between space utilization reports. Default is '
-      + '%(default)s.'
+      + f'{DEFAULT_REPORT_INTERVAL}.'
       )
 
     parser.add_argument(
       '-c', '--count', metavar='NUMBER', type=count,
       help='Number of space utilization reports to print before stopping. '
-      + 'Default is to continue forever.'
+      + 'Default is to continue forever. To disable regular reports in '
+      + 'maintain mode, set this to zero (0).'
       )
 
     threshold_group = parser.add_mutually_exclusive_group()
@@ -450,8 +525,8 @@ def parse_args(argv):
       '-p', '--percent-free', metavar='PERCENT', type=percent_free,
       help='Minimum percentage of free disk space to maintain. '
       + 'Only applicable in maintain mode. Cannot be used in combination with '
-      + '-g/--gigabytes-free. Default is %(default)s, if neither gigabytes '
-      + 'or percent are specified.'
+      + f'-g/--gigabytes-free. Default is {DEFAULT_THRESHOLD_PCT}, if '
+      + 'neither gigabytes or percent are specified.'
       )
 
     parser.add_argument(
@@ -461,11 +536,12 @@ def parse_args(argv):
       + '"age" sorts only on the age of the recordings. "category" sorts '
       + f'first by category {CATEGORY_PRIORITY}, then by age. '
       + 'Use in combination with -l/--list-recordings to determine which '
-      + 'policy works best for your situation. Default is "%(default)s".'
+      + 'policy works best for your situation. Default is '
+      + f'"{DEFAULT_DELETE_POLICY}".'
       )
 
     parser.add_argument(
-      '-w', '--watched-first', action='store_true',
+      '-w', '--watched-first', action='store_const', const=True,
       help='Delete watched recordings first, before applying the selected '
       + 'delete policy. Default is to apply the selected delete policy '
       + 'without regard to whether recordings are watched or not.'
@@ -475,8 +551,9 @@ def parse_args(argv):
       '-o', '--watched-offset', metavar='SECONDS', type=watched_offset,
       help='Threshold for considering a recording "watched". This is the '
       + 'number of seconds remaining to be watched at the end of a recording '
-      + 'below which it is considered "watched". Default is %(default)s '
-      + f'seconds ({duration(DEFAULT_WATCHED_OFFSET)}).'
+      + 'below which it is considered "watched". Default is '
+      + f'{DEFAULT_WATCHED_OFFSET} seconds '
+      + f'({duration(DEFAULT_WATCHED_OFFSET)}).'
       )
 
     parser.add_argument(
@@ -485,6 +562,11 @@ def parse_args(argv):
       + 'maintain mode, and then exit. Use in combination with '
       + '-s/--delete-policy and -w/--watched-first to determine which '
       + 'policy works best for your situation.'
+      )
+
+    parser.add_argument(
+      '-V', '--version', action='store_true',
+      help='Show version number and exit.'
       )
 
     verbose_group = parser.add_mutually_exclusive_group()
@@ -500,27 +582,15 @@ def parse_args(argv):
       + 'messages are printed by default.'
       )
 
-    # Try to pull a config file and device ID off the command-line first
-    args, remaining_argv = conf_parser.parse_known_args(argv)
-
-    if args.version:
-        return (args)
-
-    if args.conf_file is not None:
-        # defaults comes back modified with config file settings
-        parse_conf(args.conf_file, args.device_id, defaults)
-
-    parser.set_defaults(**defaults)
-
-    args = parser.parse_args(args=remaining_argv, namespace=args)
+    args = parser.parse_args(argv)
     return(args)
 
 # End parse_args
 
 
-def parse_conf(conf_file, device_id, defaults):
+def parse_conf(conf_file, device_id, settings):
 
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
     config.read(conf_file.name)
 
     if (device_id != DEFAULT_DEVICE_ID and config.has_section(device_id)):
@@ -534,62 +604,70 @@ def parse_conf(conf_file, device_id, defaults):
 
     try:
 
-        if (config.get(section, 'gigabytes_free', fallback='') != ''
-                and config.get(section, 'percent_free', fallback='') != ''):
+        settings['mode'] = validate_mode(config.get(
+                             section, 'mode',
+                             fallback=settings['mode']
+                             ))
+        settings['interval'] = validate_interval(config.get(
+                                 section, 'interval',
+                                 fallback=settings['interval']
+                                 ))
+        settings['count'] = validate_count(config.get(
+                              section, 'count',
+                              fallback=settings['count']
+                              ))
+        settings['delete_policy'] = validate_delete_policy(config.get(
+                                      section, 'delete_policy',
+                                      fallback=settings['delete_policy']
+                                      ))
+        settings['gigabytes_free'] = validate_gigabytes_free(config.get(
+                                       section, 'gigabytes_free',
+                                       fallback=settings['gigabytes_free']
+                                       ))
+        settings['percent_free'] = validate_percent_free(config.get(
+                                     section, 'percent_free',
+                                     fallback=settings['percent_free']
+                                     ))
+        settings['watched_first'] = config.getboolean(
+                                      section, 'watched_first',
+                                      fallback=settings['watched_first']
+                                      )
+        settings['watched_offset'] = validate_watched_offset(config.get(
+                                       section, 'watched_offset',
+                                       fallback=settings['watched_offset']
+                                       ))
+
+        if (settings['gigabytes_free'] is not None
+                and settings['percent_free'] is not None):
             raise ValueError('gigabytes_free and percent_free cannot both be '
                              'specified'
                              )
 
-        defaults['mode'] = config.get(section, 'mode',
-                                      fallback=defaults['mode']
-                                      )
-        validate_mode(defaults['mode'])
-        defaults['interval'] = config.get(section, 'interval',
-                                          fallback=defaults['interval']
-                                          )
-        validate_interval(defaults['interval'])
-        defaults['count'] = config.get(section, 'count',
-                                       fallback=defaults['count']
-                                       )
-        if defaults['count'] == '':
-            defaults['count'] = None
-        validate_count(defaults['count'])
-        defaults['delete_policy'] = config.get(
-                                      section, 'delete_policy',
-                                      fallback=defaults['delete_policy']
-                                      )
-        validate_delete_policy(defaults['delete_policy'])
-        defaults['gigabytes_free'] = config.get(
-                                       section, 'gigabytes_free',
-                                       fallback=defaults['gigabytes_free']
-                                       )
-        if defaults['gigabytes_free'] == '':
-            defaults['gigabytes_free'] = None
-        validate_gigabytes_free(defaults['gigabytes_free'])
-        defaults['percent_free'] = config.get(
-                                     section, 'percent_free',
-                                     fallback=defaults['percent_free']
-                                     )
-        if defaults['percent_free'] == '':
-            defaults['percent_free'] = None
-        validate_percent_free(defaults['percent_free'])
-        defaults['watched_first'] = config.getboolean(
-                                      section, 'watched_first',
-                                      fallback=defaults['watched_first']
-                                      )
-        defaults['watched_offset'] = config.get(
-                                       section, 'watched_offset',
-                                       fallback=defaults['watched_offset']
-                                       )
-        validate_watched_offset(defaults['watched_offset'])
-
-        if (defaults['gigabytes_free'] is None
-                and defaults['percent_free'] is None):
-            defaults['percent_free'] = DEFAULT_THRESHOLD_PCT
     except ValueError as e:
         raise ValueError(f'Configuration file {conf_file.name}: {str(e)}')
 
 # End parse_conf
+
+
+def get_all_device_ids():
+
+    device_id_list = []
+
+    local_ip_pattern = re.compile(r'(?P<ip_addr>[^:]+)(?P<port>(:|\d+))')
+
+    response = requests.get(API_DISCOVER_URL)
+    response.raise_for_status()
+    devices = response.json()
+
+    for device in devices:
+        if 'StorageID' in device:
+            if 'DeviceID' in device:
+                device_id_list.append(device['DeviceID'])
+            elif 'LocalIP' in device:
+                m = local_ip_pattern.match(device['LocalIP'])
+                device_id_list.append(m.group('ip_addr'))
+
+    return(device_id_list)
 
 
 def get_device(device_id):
@@ -644,7 +722,7 @@ def get_device(device_id):
                 break
 
     if not device_found:
-        raise NoDeviceFoundError
+        raise DeviceNotFoundError(device_id)
 
     # Custom elements
     device['StatusURL'] = f"{device['BaseURL']}/status.json"
@@ -658,14 +736,16 @@ def get_device(device_id):
         model_family = m.group('family')
         device['Tag'] = f'[{model_family} '
 
-    if device_id.upper() == WILDCARD_DEVICE_ID.upper():
+    if device_id.upper() in [DISCOVER_DEVICE_ID.upper(),
+                             WILDCARD_DEVICE_ID.upper(),
+                             WILDCARD_HOST.upper()]:
         if 'DeviceID' in device:
-            device['Tag'] += f'{device["DeviceID"]}'
+            device['Tag'] += device['DeviceID']
         elif 'LocalIP' in device:
             m = local_ip_pattern.match(device['LocalIP'])
-            device['Tag'] += f'{m.group("ip_addr")}'
+            device['Tag'] += m.group('ip_addr')
     else:
-        device['Tag'] += f'{device_id}'
+        device['Tag'] += device_id
 
     device['Tag'] += ']'
     max_device_streams = (MAX_STREAMS[model_family])
@@ -676,11 +756,30 @@ def get_device(device_id):
 # End get_device
 
 
+def get_device_settings(device_id, conf_file, cli_settings):
+
+    settings = DEFAULT_SETTINGS.copy()
+    if conf_file is not None:
+        parse_conf(conf_file, device_id, settings
+                   )
+    settings.update(cli_settings)
+
+    if (settings['gigabytes_free'] is None
+            and settings['percent_free'] is None):
+        settings['percent_free'] = DEFAULT_THRESHOLD_PCT
+
+    return(settings)
+
+# End get_device_settings
+
+
 def verify_device(device, requested_device_id):
 
     device_is_good = False
 
-    if requested_device_id.upper() == WILDCARD_DEVICE_ID.upper():
+    if requested_device_id.upper() in [DISCOVER_DEVICE_ID.upper(),
+                                       WILDCARD_DEVICE_ID.upper(),
+                                       WILDCARD_HOST.upper()]:
         device_is_good = True
 
     if not device_is_good and 'DeviceID' in device:
@@ -706,8 +805,13 @@ def verify_device(device, requested_device_id):
             pass
 
     if (device_is_good) and ('StorageID' not in device):
-        device_is_good = False
-        logger.debug(f'Device {device["DeviceID"]} has no storage')
+        # If we're discover-ing (looking for the first device with a
+        # StorageID), we can skip this one. Otherwise, it's a hard reject.
+        if requested_device_id.upper() == DISCOVER_DEVICE_ID.upper():
+            device_is_good = False
+            logger.debug(f'Device {device["DeviceID"]} has no storage')
+        else:
+            raise NoDeviceStorageError(requested_device_id)
 
     return(device_is_good)
 
@@ -725,9 +829,7 @@ def refresh_device_data(device):
 # End refresh_device_data
 
 
-def get_sorted_recordings(device, sort_method, watched_first,
-                          watched_threshold
-                          ):
+def get_sorted_recordings(device):
 
     response = requests.get(device['StorageURL'])
     response.raise_for_status()
@@ -763,11 +865,11 @@ def get_sorted_recordings(device, sort_method, watched_first,
                 seconds_unwatched = (recording['RecordEndTime']
                                      - recording['RecordStartTime']
                                      - recording['Resume'])
-                if (seconds_unwatched <= watched_threshold):
+                if (seconds_unwatched <= device['settings']['watched_offset']):
                     recording['Watched'] = True
 
-    if sort_method == 'age':
-        if watched_first:
+    if device['settings']['delete_policy'] == 'age':
+        if device['settings']['watched_first']:
             sorted_recordings = sorted(recordings,
                                        key=lambda r: (-r['Watched'],
                                                       r['StartTime']
@@ -778,12 +880,12 @@ def get_sorted_recordings(device, sort_method, watched_first,
                                        key=lambda r: r['StartTime']
                                        )
 
-    elif sort_method == 'category':
+    elif device['settings']['delete_policy'] == 'category':
         for recording in recordings:
             recording['CategoryPriority'] = CATEGORY_PRIORITY.index(
                                               recording['Category']
                                               )
-        if watched_first:
+        if device['settings']['watched_first']:
             sorted_recordings = sorted(recordings,
                                        key=lambda r: (-r['Watched'],
                                                       r['CategoryPriority'],
@@ -794,14 +896,29 @@ def get_sorted_recordings(device, sort_method, watched_first,
                                        key=lambda r: (r['CategoryPriority'],
                                                       r['StartTime']
                                                       ))
-    # End sort_method if
+    # End delete_policy if
 
     return(sorted_recordings)
 
 # End get_sorted_recordings
 
 
-def print_recording_list(recordings):
+def print_recording_list(device):
+
+    bumper_char = '#'
+    header_width = 78
+    tag_width = len(device['Tag']) + 2
+    left_bumper_width = math.floor((header_width - tag_width) / 2)
+    right_bumper_width = header_width - left_bumper_width - tag_width
+
+    for i in range(1, left_bumper_width):
+        print(bumper_char, end='')
+    print(f' {device["Tag"]} ', end='')
+    for i in range(1, right_bumper_width):
+        print(bumper_char, end='')
+    print()
+
+    recordings = get_sorted_recordings(device)
 
     for recording in recordings:
         msg = f'{time.ctime(recording["StartTime"])}: {recording["Title"]}'
@@ -814,12 +931,10 @@ def print_recording_list(recordings):
 # End print_recording_list
 
 
-def delete_recording(device, delete_policy, watched_first, watched_offset):
+def delete_recording(device):
 
     try:
-        sorted_recordings = get_sorted_recordings(device, delete_policy,
-                                                  watched_first, watched_offset
-                                                  )
+        sorted_recordings = get_sorted_recordings(device)
     except ConnectionError as conn_err:
         logger.error(f'Failed to get list of recordings: {conn_err}')
         pass
@@ -833,11 +948,11 @@ def delete_recording(device, delete_policy, watched_first, watched_offset):
 
         logger.info(f'{device["Tag"]} '
                     + f'Deleting "{recording["Title"]}" recorded at '
-                    + f'{time.ctime(recording["StartTime"])}',
+                    + time.ctime(recording["StartTime"]),
                     )
 
         try:
-            response = requests.post(f'{recording["CmdURL"]}'
+            response = requests.post(recording["CmdURL"]
                                      + '&cmd=delete&rerecord=1'
                                      )
             response.raise_for_status()
@@ -851,48 +966,6 @@ def delete_recording(device, delete_policy, watched_first, watched_offset):
                        + 'more space.')
 
 # End delete_recording
-
-
-def maintain(device, delete_policy, watched_first, watched_offset):
-
-    check_interval = 0
-
-    while True:
-
-        time.sleep(check_interval)
-
-        with t_lock:
-            logger.debug(f'{device["Tag"]} Running maintenance cycle - '
-                         + 'checking free space')
-
-            refresh_device_data(device)
-
-            if device['FreeSpace'] < device['MinimumFreeSpace']:
-                report_space_utilization(device)
-                delete_recording(device, delete_policy, watched_first,
-                                 watched_offset
-                                 )
-                check_interval = MIN_CHECK_INTERVAL
-
-            elif device['FreeSpace'] == device['MinimumFreeSpace']:
-                check_interval = MIN_CHECK_INTERVAL
-
-            else:
-                bytes_to_threshold = (device['FreeSpace']
-                                      - device['MinimumFreeSpace']
-                                      )
-                check_interval = math.floor(bytes_to_threshold
-                                            / device['MaxRecordingBps']
-                                            )
-                if check_interval < MIN_CHECK_INTERVAL:
-                    check_interval = MIN_CHECK_INTERVAL
-
-            logger.debug(f'{device["Tag"]} Next maintenance cycle in '
-                         + f'{duration(check_interval)}'
-                         )
-        # End t_lock
-
-# End maintain
 
 
 def report_space_utilization(device):
@@ -920,6 +993,148 @@ def report_space_utilization(device):
 # End report_space_utilization
 
 
+def maintain(device):
+
+    check_interval = 0
+
+    while True:
+
+        seconds_slept = 0
+        while seconds_slept < check_interval:
+            if run_event.is_set():
+                time.sleep(1)
+                seconds_slept += 1
+            else:
+                return()
+
+        with t_lock:
+            logger.debug(f'{device["Tag"]} Running maintenance cycle - '
+                         + 'checking free space')
+
+            refresh_device_data(device)
+
+            if device['FreeSpace'] < device['MinimumFreeSpace']:
+                report_space_utilization(device)
+                delete_recording(device)
+                check_interval = MIN_CHECK_INTERVAL
+
+            elif device['FreeSpace'] == device['MinimumFreeSpace']:
+                check_interval = MIN_CHECK_INTERVAL
+
+            else:
+                bytes_to_threshold = (device['FreeSpace']
+                                      - device['MinimumFreeSpace']
+                                      )
+                check_interval = math.floor(bytes_to_threshold
+                                            / device['MaxRecordingBps']
+                                            )
+                if check_interval < MIN_CHECK_INTERVAL:
+                    check_interval = MIN_CHECK_INTERVAL
+
+            logger.debug(f'{device["Tag"]} Next maintenance cycle in '
+                         + duration(check_interval)
+                         )
+        # End t_lock
+
+# End maintain
+
+
+def start_maintenance_thread(device):
+
+    if device['settings']['gigabytes_free'] is None:
+        device['MinimumFreeSpace'] = (device['TotalSpace']
+                                      * (device['settings']['percent_free']
+                                      / 100)
+                                      )
+        threshold_str = f"{device['settings']['percent_free']:.1f}%"
+    else:
+        device['MinimumFreeSpace'] = (device['settings']['gigabytes_free']
+                                      * BYTES_PER_GB
+                                      )
+        threshold_str = binarysize(device['MinimumFreeSpace'])
+
+    if device['MinimumFreeSpace'] > device['TotalSpace']:
+        raise ValueError(
+          'Minimum free space '
+          + f'({binarysize(device["MinimumFreeSpace"])}) '
+          + f'cannot be greater than device {device["Tag"]} '
+          + f'total space ({binarysize(device["TotalSpace"])})'
+          )
+
+    msg = (f'{device["Tag"]} Recordings will be deleted according to '
+           + f"{device['settings']['delete_policy']} to maintain minimum free "
+           + f'space of {threshold_str}.'
+           )
+    if device['settings']['watched_first']:
+        msg += ' Watched recordings will be deleted first.'
+    logger.info(msg)
+
+    # Start new thread for maintenance
+    maintenance_thread = threading.Thread(
+                           target=maintain,
+                           name=f'maintenance-{device["Tag"]}',
+                           args=(device,)
+                           )
+    maintenance_thread.start()
+
+# End start_maintenance_thread
+
+
+def report(device):
+
+    report_count = 0
+    while (device['settings']['count'] is None
+            or report_count < device['settings']['count']):
+        report_count += 1
+        seconds_slept = 0
+        if report_count > 1:
+            while seconds_slept < device['settings']['interval']:
+                if run_event.is_set():
+                    time.sleep(1)
+                    seconds_slept += 1
+                else:
+                    return()
+        with t_lock:
+            refresh_device_data(device)
+            report_space_utilization(device)
+
+# End report
+
+
+def start_report_thread(device):
+
+    if device['settings']['count'] != 0:
+        msg = (f'{device["Tag"]} Disk space utilization will be reported '
+               + f'every {duration(device["settings"]["interval"])}'
+               )
+        if device['settings']['count'] is not None:
+            msg += f', stopping after {device["settings"]["count"]} '
+            msg += ('report'
+                    if device['settings']['count'] == 1
+                    else 'reports'
+                    )
+        logger.info(msg)
+
+        report_thread = threading.Thread(
+                          target=report,
+                          name=f'report-{device["Tag"]}',
+                          args=(device,),
+                          )
+        report_thread.start()
+
+# End start_report_thread
+
+
+def stop_threads():
+
+    run_event.clear()
+    for thread in threading.enumerate():
+        if (re.match(r'(^report-|^maintenance-)', thread.name)):
+            thread.join()
+
+# End stop_threads
+
+
 def main():
 
     global logger
@@ -932,98 +1147,81 @@ def main():
         if args.version:
             print(f'{os.path.basename(sys.argv[0])} {VERSION}')
             sys.exit()
-
-        quiet = args.quiet
-        verbose = args.verbose
-        mode = args.mode
-        report_interval = args.interval
-        report_count_limit = args.count
-        delete_policy = args.delete_policy
-        threshold_gb = args.gigabytes_free
-        threshold_pct = args.percent_free
-        watched_first = args.watched_first
-        watched_offset = args.watched_offset
-        list_recordings = args.list_recordings
-
-        if quiet:
+        if args.quiet:
             logger.setLevel(logging.WARNING)
-        if verbose:
+        if args.verbose:
             logger.setLevel(logging.DEBUG)
 
-        if args.device_id.upper() in [DEFAULT_DEVICE_ID.upper(),
-                                      WILDCARD_HOST.upper()
-                                      ]:
-            device = get_device(WILDCARD_DEVICE_ID)
+        if args.device_list is None:
+            device_list = [DEFAULT_DEVICE_ID]
+        elif 'ALL' in (device_id.upper() for device_id in args.device_list):
+            device_list = get_all_device_ids()
         else:
-            device = get_device(args.device_id)
+            device_list = args.device_list
 
-        logger.debug(f'Monitoring device {device["Tag"]}')
+        # Populate a dictionary of values only where they were given on the
+        # command-line. No defaults should be included. These will be used to
+        # override Defaults and config file settings later.
+        cli_settings = {}
+        if args.mode is not None:
+            cli_settings['mode'] = args.mode
+        if args.interval is not None:
+            cli_settings['interval'] = args.interval
+        if args.count is not None:
+            cli_settings['count'] = args.count
+        if args.delete_policy is not None:
+            cli_settings['delete_policy'] = args.delete_policy
+        if args.gigabytes_free is not None:
+            cli_settings['gigabytes_free'] = args.gigabytes_free
+        if args.percent_free is not None:
+            cli_settings['percent_free'] = args.percent_free
+        if args.watched_first is not None:
+            cli_settings['watched_first'] = args.watched_first
+        if args.watched_offset is not None:
+            cli_settings['watched_offset'] = args.watched_offset
 
-        if list_recordings:
-            print_recording_list(get_sorted_recordings(device, delete_policy,
-                                                       watched_first,
-                                                       watched_offset
-                                                       ))
-            sys.exit()
-
-        if report_count_limit == 0:
-            sys.exit()
-
-        if mode == 'maintain':
-
-            if threshold_gb is None:
-                device['MinimumFreeSpace'] = (device['TotalSpace']
-                                              * (threshold_pct / 100)
-                                              )
-                threshold_str = f'{threshold_pct:.1f}%'
-            else:
-                device['MinimumFreeSpace'] = threshold_gb * BYTES_PER_GB
-                threshold_str = binarysize(device['MinimumFreeSpace'])
-
-            if device['MinimumFreeSpace'] > device['TotalSpace']:
-                raise ValueError(
-                  'Minimum free space '
-                  + f'({binarysize(device["MinimumFreeSpace"])}) '
-                  + f'cannot be greater than device {device["Tag"]} '
-                  + f'total space ({binarysize(device["TotalSpace"])})'
+        devices = {}
+        storage_ids = {}
+        for device_id in device_list:
+            device = get_device(device_id)
+            device['settings'] = get_device_settings(device_id, args.conf_file,
+                                                     cli_settings
+                                                     )
+            # Make sure the same device is not listed twice
+            if device['StorageID'] in storage_ids.keys():
+                raise DuplicateDeviceError(
+                  f'{device_id}, {storage_ids[device["StorageID"]]}'
                   )
+            else:
+                storage_ids[device['StorageID']] = device_id
+                logger.debug(f'Monitoring device {device["Tag"]}')
+                devices[device_id] = device
 
-            msg = (f'{device["Tag"]} Recordings will be deleted according to '
-                   + f'{delete_policy} to maintain minimum free space of '
-                   + f'{threshold_str}.'
-                   )
-            if watched_first:
-                msg += ' Watched recordings will be deleted first.'
-            logger.info(msg)
+        if len(devices) == 0:
+            raise NoDeviceFoundError
 
-            # Start new thread for maintenance
-            maintenance = threading.Thread(
-                            target=maintain,
-                            args=(device, delete_policy,
-                                  watched_first, watched_offset
-                                  ),
-                            daemon=True
-                            )
-            maintenance.start()
+        if args.list_recordings:
+            for device_id in devices.keys():
+                print_recording_list(devices[device_id])
+            sys.exit()
 
-        # End mode if
+        run_event.set()
+        for device_id in devices.keys():
+            start_report_thread(devices[device_id])
+            if devices[device_id]['settings']['mode'] == 'maintain':
+                start_maintenance_thread(devices[device_id])
 
-        msg = (f'{device["Tag"]} Disk space utilization will be reported '
-               + f'every {duration(report_interval)}'
-               )
-        if report_count_limit is not None:
-            msg += f', stopping after {report_count_limit} '
-            msg += ('report' if report_count_limit == 1 else 'reports')
-        logger.info(msg)
+        safe_to_quit = False
+        while not safe_to_quit:
+            time.sleep(0.5)
+            safe_to_quit = True
+            for thread in threading.enumerate():
+                if (re.match(r'(^report-|^maintenance-)', thread.name)):
+                # if (re.match(r'(^report-)', thread.name)):  # For testing
+                    safe_to_quit = False
+                    break
 
-        report_count = 0
-        while report_count_limit is None or report_count < report_count_limit:
-            report_count += 1
-            if report_count > 1:
-                time.sleep(report_interval)
-            with t_lock:
-                refresh_device_data(device)
-                report_space_utilization(device)
+        stop_threads()
 
     except ConnectionError as conn_err:
         logger.error(f'Failed to connect: {conn_err}')
@@ -1036,11 +1234,21 @@ def main():
     except ValueError as value_err:
         logger.error(value_err)
         sys.exit(2)
+    except DeviceNotFoundError as device_err:
+        logger.error(f'Device not found: {device_err}')
+        sys.exit(2)
     except NoDeviceFoundError:
-        msg = 'No device found to monitor'
-        logger.error(msg)
+        logger.error('No device found to monitor')
+        sys.exit(2)
+    except NoDeviceStorageError as storage_err:
+        logger.error(f'Device has no storage: {storage_err}')
+        sys.exit(2)
+    except DuplicateDeviceError as dupe_err:
+        logger.error('The following device IDs refer to the same device: '
+                     + f'{dupe_err}. Specified devices must be unique.')
         sys.exit(2)
     except KeyboardInterrupt:
+        stop_threads()
         print()
         sys.exit()
     except BrokenPipeError:

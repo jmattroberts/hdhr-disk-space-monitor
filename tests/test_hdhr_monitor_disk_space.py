@@ -78,7 +78,7 @@ class TestCLISuccess:
     def test_cli_help(self):
 
         args = ['--help']
-        expected_output = ["Monitor disk space utilization of one HDHomeRun SCRIBE, SERVIO, or RECORD"]
+        expected_output = ["Monitor disk space utilization of one or more HDHomeRun SCRIBE, SERVIO, and/or"]
         self.run_cli_test(args, expected_output)
 
 
@@ -269,16 +269,16 @@ class TestCLIFailure:
     def test_cli_device_bad(self):
 
         args = ['--count', '1', '--device-id', 'AAAAAAAA']
-        expected_stderr = ['ERROR No device found to monitor']
+        expected_stderr = ["ERROR Device not found: 'AAAAAAAA'"]
         self.run_cli_test(args, expected_stderr)
 
 
     def test_cli_device_bad_verbose(self):
 
         args = ['--count', '1', '--device-id', 'AAAAAAAA', '--verbose']
-        expected_stderr = ['ERROR No device found to monitor']
-        expected_stdout = ['Bad hostname or device ID',
-                           'Trying https://ipv4-api.hdhomerun.com/discover'
+        expected_stderr = ["ERROR Device not found: 'AAAAAAAA'"]
+        expected_stdout = ['Bad hostname or device ID: hdhr-AAAAAAAA.local',
+                           'Trying https://api.hdhomerun.com/discover'
                            ]
         self.run_cli_test(args, expected_stderr, expected_stdout)
 
@@ -442,7 +442,8 @@ class TestCLIFailure:
 
         args = ['--count', '1', '--mode', 'maintain', '--gigabytes-free', '100000']
         expected_stderr = ["ERROR Minimum free space (100.00 TB) cannot be greater than device"]
-        self.run_cli_test(args, expected_stderr)
+        expected_stdout = ['Disk space utilization will be reported every 10 minutes, stopping after 1 report']
+        self.run_cli_test(args, expected_stderr, expected_stdout)
 
 
 class TestConfSuccess:
@@ -469,6 +470,19 @@ class TestConfSuccess:
 
         assert prcs.stderr.decode('UTF-8') == ''
         assert prcs.returncode == 0
+
+
+    def test_conf_case_insensitive(self):
+
+        conf = [b'[DeFaUlT]\n',
+                b'mOde = maintain\n',
+                ]
+        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
+                           "Disk space utilization will be reported every 10 minutes",
+                           "Total: ",
+                           "Minimum Free: "
+                           ]
+        self.run_conf_test(conf, expected_output=expected_output)
 
 
     def test_conf_mode_report(self):

@@ -1,13 +1,15 @@
 # hdhr-disk-space-monitor
-Monitor disk space utilization of one HDHomeRun SCRIBE, SERVIO, or RECORD device. Optionally delete recordings to stay above a specified minimum free space.
+Monitor disk space utilization of one or more HDHomeRun SCRIBE, SERVIO, or RECORD devices. Optionally delete recordings to stay above a specified minimum free space.
 
 
 # Device Selection
 ```
---device discover
+--device discover|device_id|ip_address|hostname|ALL ...
 ```
 
-Each instance of the monitor will monitor only one device. By default, devices are discovered on the local network and the first one found with a StorageID is monitored. Optionally, a specific device ID, IP address, or hostname can be passed to the monitor.
+Each instance of the monitor will monitor one or several devices. By default, devices are discovered on the local network and the first one found with a StorageID is monitored. Optionally, specific device IDs, IP addresses, or hostnames can be passed to the monitor.
+
+If the keyword "ALL" is given, then all devices found with a StorageID will be monitored.
 
 # Modes of Operation
 
@@ -19,8 +21,8 @@ Each instance of the monitor will monitor only one device. By default, devices a
 In the default "report" mode, the monitor reports disk space utilization periodically. The default reporting interval, which can be overridden, is 10 minutes.
 
 ```
-2020-05-01 22:26:54,844 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 588.58 GiB (63.2%); Free: 342.48 GiB (36.8%)
-2020-05-01 22:36:54,956 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 589.44 GiB (63.3%); Free: 341.61 GiB (36.7%)
+2020-05-01 22:26:54,844 [HDVR-4US-1TB 12345678] Total: 999.71 GB; Used: 588.58 GB (58.9%); Free: 411.13 GB (41.1%)
+2020-05-01 22:36:54,956 [HDVR-4US-1TB 12345678] Total: 999.71 GB; Used: 589.44 GB (59.0%); Free: 410.27 GB (41.0%)
 ```
 
 ## Maintain Mode
@@ -33,7 +35,7 @@ In "maintain" mode, the monitor will report disk space utilization as it does in
 When the minimum free space threshold is crossed, an "off-interval" report will be written, and then a recording will be deleted.
 
 ```
-2020-05-01 23:53:49,885 [HDVR-4US-1TB 12345678] Total: 931.06 GiB; Used: 913.06 GiB (98.1%); Free: 18.0 GiB (1.9%); Minimum Free: 18.62 GiB (2.0%)
+2020-05-01 23:53:49,885 [HDVR-4US-1TB 12345678] Total: 999.71 GiB; Used: 980.72 GiB (98.1%); Free: 18.99 GiB (1.9%); Minimum Free: 19.99 GiB (2.0%)
 2020-05-01 23:53:50,637 [HDVR-4US-1TB 12345678] Deleting "Keeping Up Appearances" recorded on Sun Jul 28 22:30:00 2019
 
 ```
@@ -48,7 +50,7 @@ The disk space checks for free space maintenance are separate from those for the
 --percent-free PERCENT
 --gigabytes-free GIGABYTES
 ```
-The default amount of free space to maintain is 2%. This can be overridden with a different percentage, or with an absolute number of gigabytes (GiB).
+The default amount of free space to maintain is 2%. This can be overridden with a different percentage, or with an absolute number of gigabytes (GB).
 
 ### Delete Policies
 ```
@@ -85,18 +87,26 @@ No space check or deletion happens when this option is used.
 # Usage Guide
 
 ```
-usage: hdhr_monitor_disk_space.py [-h] [-f FILE] [-d DEVICE_ID|IP|HOSTNAME]
-                                  [-V] [-m {report,maintain}] [-i SECONDS]
-                                  [-c NUMBER] [-g GIGABYTES | -p PERCENT]
-                                  [-s {age,category}] [-w]
-                                  [-o SECONDS] [-l] [-q | -v]
+usage: hdhr_monitor_disk_space.py [-h]
+                                  [-d DEVICE_ID|IP|HOSTNAME|ALL [DEVICE_ID|IP|HOSTNAME|ALL ...]]
+                                  [-f FILE] [-m {report,maintain}]
+                                  [-i SECONDS] [-c NUMBER]
+                                  [-g GIGABYTES | -p PERCENT]
+                                  [-s {age,category}] [-w] [-o SECONDS] [-l]
+                                  [-V] [-q | -v]
 
-Monitor disk space utilization of one HDHomeRun SCRIBE, SERVIO, or RECORD
-device. Optionally delete recordings to stay above a specified free space
-minimum.
+Monitor disk space utilization of one or more HDHomeRun SCRIBE, SERVIO, and/or
+RECORD devices. Optionally delete recordings to stay above a specified free
+space minimum.
 
 optional arguments:
   -h, --help            show this help message and exit
+  -d DEVICE_ID|IP|HOSTNAME|ALL [DEVICE_ID|IP|HOSTNAME|ALL ...], --device-id DEVICE_ID|IP|HOSTNAME|ALL [DEVICE_ID|IP|HOSTNAME|ALL ...]
+                        ID, IP address, or hostname of device(s) to monitor.
+                        Default is "discover" which discovers devices on the
+                        local network and monitors the first device found with
+                        a StorageID. If "ALL" is specified, then all devices
+                        found with StorageID will be monitored.
   -f FILE, --conf-file FILE
                         Path to configuration file. The configuration file
                         supports overriding the built-in defaults, as well as
@@ -104,12 +114,6 @@ optional arguments:
                         are applied when a device ID is specified using
                         -d/--device-id. Options given on the command-line
                         override those in the configuration file.
-  -d DEVICE_ID|IP|HOSTNAME, --device-id DEVICE_ID|IP|HOSTNAME
-                        ID, IP address, or hostname of device to monitor.
-                        Default is "discover" which discovers devices on the
-                        local network and monitors the first device found with
-                        a StorageID.
-  -V, --version         Show version number and exit.
   -m {report,maintain}, --mode {report,maintain}
                         Mode of operation. "report" mode reports disk space
                         utilization periodically. "maintain" mode reports disk
@@ -123,7 +127,9 @@ optional arguments:
                         Default is 600.
   -c NUMBER, --count NUMBER
                         Number of space utilization reports to print before
-                        stopping. Default is to continue forever.
+                        stopping. Default is to continue forever. To disable
+                        regular reports in maintain mode, set this to zero
+                        (0).
   -g GIGABYTES, --gigabytes-free GIGABYTES
                         Minimum number of free gigabytes (GB) of disk space to
                         maintain. Only applicable in maintain mode. Cannot be
@@ -157,6 +163,7 @@ optional arguments:
                         combination with -s/--delete-policy and -w/--watched-
                         first to determine which policy works best for your
                         situation.
+  -V, --version         Show version number and exit.
   -q, --quiet           Suppress all messages except errors.
   -v, --verbose         Print more informational messages. Free space and
                         delete messages are printed by default.
@@ -165,7 +172,7 @@ The interval for free space checks in maintain mode is independent from the
 interval for disk utilization reports (-i/--interval). The maintenance runs in
 the background at an interval based on the amount of free space found during
 the last check. If there is a lot of space available, it will be a long time -
-maybe many hours - before the next check. If there is little free space
+maybe many hours - until the next check. If there is little free space
 available, it might be only a few seconds until the next check. This can be
 observed with verbose output enabled (-v/--verbose).
 ```

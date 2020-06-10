@@ -5,10 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- Monitor multiple devices in a single process
 - Allow configuration of maximum recording age or number of recordings based on category
 - Allow configuration of maximum recording age or number of recordings per recording rule or series
 - Web UI to maintain configuration
+
+## [1.5.0] - 2020-06-10
+
+### Added
+
+- Multiple devices can be monitored by a single process. Provide multiple device IDs, IP addresses, or hostnames to monitor specific devices. Use the keyword "ALL" as a device ID to monitor all devices found with a StorageID.
+
+### Changed
+
+- In maintain mode, if the requested count of reports (-c|--count) has been given, maintenance will continue to run. This allows a "quiet" maintain mode if the count is set to zero.
 
 ## [1.4.0] - 2020-06-09
 
