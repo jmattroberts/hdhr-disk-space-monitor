@@ -1,178 +1,259 @@
 # hdhr-disk-space-monitor
-Monitor disk space utilization of one or more HDHomeRun SCRIBE, SERVIO, or RECORD devices. Optionally delete recordings to stay above a specified minimum free space.
+
+Monitor disk space utilization of HDHomeRun SCRIBE, SERVIO, and RECORD devices. Optionally delete recordings to stay above a specified free space minimum, get rid of recordings older than a maximum age, or keep only a certain number of episodes.
 
 
-# Device Selection
-```
---device discover|device_id|ip_address|hostname|ALL ...
-```
+ - [Use Cases](#use-cases)
+	 - [Disk Space Reporting](#disk-space-reporting)
+	 - [Disk Space Maintenance](#disk-space-maintenance)
+	 - [Recording Maintenance](#recording-maintenance)
+ - [General Configuration](#general-configuration)
+	 - [Device Discovery/Selection](#device-discoveryselection)
+	 - [Space Maintenance Delete Policies](#space-maintenance-delete-policies)
+	 - [Delete Protection](#delete-protection)
+	 - [Watched Recordings](#watched-recordings)
+	 - [Listing Recordings](#listing-recordings)
+ - [Command-Line Usage](#command-line-usage)
 
-Each instance of the monitor will monitor one or several devices. By default, devices are discovered on the local network and the first one found with a StorageID is monitored. Optionally, specific device IDs, IP addresses, or hostnames can be passed to the monitor.
+Also see the example configuration file available in the code. There are many configuration options related to recording maintenance that are only available in the configuration file.
 
-If the keyword "ALL" is given, then all devices found with a StorageID will be monitored.
+# Use Cases
 
-# Modes of Operation
+## Disk Space Reporting
 
-## Report Mode
-```
---mode report
-```
+### "I want to see how much space is being used by my storage devices."
 
-In the default "report" mode, the monitor reports disk space utilization periodically. The default reporting interval, which can be overridden, is 10 minutes.
-
-```
-2020-05-01 22:26:54,844 [HDVR-4US-1TB 12345678] Total: 999.71 GB; Used: 588.58 GB (58.9%); Free: 411.13 GB (41.1%)
-2020-05-01 22:36:54,956 [HDVR-4US-1TB 12345678] Total: 999.71 GB; Used: 589.44 GB (59.0%); Free: 410.27 GB (41.0%)
-```
-
-## Maintain Mode
-```
---mode maintain
-```
-
-In "maintain" mode, the monitor will report disk space utilization as it does in report mode, as well as maintain a minimum amount of free disk space.  It does this by deleting one recording per disk space check if less than the minimum amount of free space is available. This will continue until the minimum is made available.
-
-When the minimum free space threshold is crossed, an "off-interval" report will be written, and then a recording will be deleted.
+If not told to do anything else, the monitor will simply report disk space utilization every 10 minutes for all HDHomeRun storage devices found on the network.
 
 ```
-2020-05-01 23:53:49,885 [HDVR-4US-1TB 12345678] Total: 999.71 GiB; Used: 980.72 GiB (98.1%); Free: 18.99 GiB (1.9%); Minimum Free: 19.99 GiB (2.0%)
-2020-05-01 23:53:50,637 [HDVR-4US-1TB 12345678] Deleting "Keeping Up Appearances" recorded on Sun Jul 28 22:30:00 2019
+$ hdhr_monitor_disk_space.py
+2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%)
+2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%)
 
 ```
-The disk space checks for free space maintenance are separate from those for the report. They happen in the background at an interval determined by the amount of free disk space as of the last maintenance check. The more disk space is available, the longer it will be until the next check - up to many hours. If there is very little free space left, the maintenance checks can be as often as every few seconds. This can be observed in verbose mode, but it can get very... verbose.
+
+## Disk Space Maintenance
+
+### "I want to make sure that my storage devices do not fill up."
+
+Tell the monitor the amount of free space to maintain, either by percentage (`-p/--percent-free`) or absolute gigabytes (`-g/--gigabytes-free`), and it will delete the oldest recording (configurable) when that amount is no longer free.
 
 ```
-2020-05-01 23:53:49,885 [HDVR-4US-1TB 12345678] Running maintenance cycle - checking free space
-2020-05-01 23:53:49,901 [HDVR-4US-1TB 12345678] Next maintenance cycle in 9 hours, 28 minutes, 17 seconds
+$ hdhr_monitor_disk_space.py --gigabytes-free 10
+2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%); Minimum Free: 10.00 GB (1.0%)
+2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 10.00 GB (0.9%)
 ```
-### Minimum Free Space
-```
---percent-free PERCENT
---gigabytes-free GIGABYTES
-```
-The default amount of free space to maintain is 2%. This can be overridden with a different percentage, or with an absolute number of gigabytes (GB).
 
-### Delete Policies
+Whenever a recording is deleted, it is reported, along with the reason.
+
+```
+2020-05-01 23:53:50,637 [HDHomeRun SCRIBE QUATRO 12345678] Deleting "Keeping Up Appearances" recorded Sun Jul 28 22:30:00 2019 to free space
+```
+
+### "I want to make sure that my storage devices do not fill up, but I want to use different settings for each device."
+
+The configuration file can be used for this. If one device needs to maintain 10GB free, and the other needs to maintain 25% free, there are a few options.
+
+#### Option 1: Set 10GB as the default and override one device with 25%.
+
+```
+[DEFAULT]
+gigabytes_free: 10
+
+[device:192.168.1.100]
+# Override the default
+gigabytes_free:
+percent_free: 25
+```
+
+#### Option 2: Configure each device individually.
+
+```
+[device:12345678]
+gigabytes_free: 10
+
+[device:192.168.1.100]
+percent_free: 25
+```
+
+In either case above, if the configuration file is named /etc/hdhr_disk_space_monitor.conf, then the following would get it started:
+
+```
+$ hdhr_monitor_disk_space.py --conf-file /etc/hdhr_disk_space_monitor.conf
+2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%); Minimum Free: 10.00 GB (1.0%)
+2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 267.50 GB (25.0%)
+```
+
+#### Option 3: Independent processes without configuration file.
+
+```
+$ hdhr_monitor_disk_space.py --device-id 12345678 --gigabytes-free 10
+2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%); Minimum Free: 10.00 GB (1.0%)
+```
+
+```
+$ hdhr_monitor_disk_space.py --device-id 192.168.1.100 --percent-free 25
+2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 267.50 GB (25.0%)
+```
+
+## Recording Maintenance
+
+Recording maintenance is configured entirely in the configuration file. See the example configuration file for a description of all options. The recordings are maintained as a whole across all storage devices, so it's best **not** to split this across multiple processes as in Option 3 above.
+
+### "I want 'news' category recordings to be deleted after 2 days, 'sport' category recordings to be protected from any automatic deletion, and no more than 5 episodes of 'The Masked Singer'.
+
+```
+[category:news]
+max_age_days: 2
+
+[category:sport]
+protected: yes
+
+[series:The Masked Singer]
+max_episodes: 5
+```
+
+# General Configuration
+
+## Device Discovery/Selection
+
+```
+--device discover|device_id|ip_address|hostname ...
+```
+
+Each instance of the monitor can monitor one or several devices. By default, it will discover all storage devices on the network and monitor/maintain them all according to the options and configuration provided. Optionally, specific device IDs, IP addresses, and/or hostnames can be passed to the monitor, and it will only monitor/maintain those.
+
+## Space Maintenance Delete Policies
+
 ```
 --delete-policy {age,category}
 ```
 
-There are 2 delete policies that can be applied to select a recording to be deleted.
+There are 2 delete policies that can be applied to select a recording to be deleted to maintain the free space minimum.
 
 * **Age** - (default) The oldest recording is selected
 * **Category** - Recordings are sorted first by category, then by age within category. The oldest recording in the least important category is selected. The categories, in order of increasing importance are:
+
   * News
   * Series
   * Sports
   * Movies
   * Specials
 
-### Watched Recordings
+That category order can be altered by modifying the `delete_order` setting in the configuration file.
+
+## Delete Protection
+
+In the configuration file, any category or specific series can have `protected: yes` set. This will cause all episodes of that category or series to be protected from deletion by this program. This setting has no effect on the ability to delete recordings in the DVR UI,
+
+Also, any recording that is currently playing or is in the process of being recorded is protected from deletion.
+
+## Watched Recordings
+
 ```
 --watched-first
 --watched-offset SECONDS
 ```
+
 The delete policies described above do not take into account whether recordings have been watched or not. To have watched recordings deleted first, before the selected delete policy comes into effect, use the `--watched-first` option.
 
 A recording is considered to be watched if there are fewer than 3 minutes remaining to be watched. This can be modified using the `--watched-offset` option.
 
-# Listing Recordings
+## Listing Recordings
+
 ```
 --list-recordings
+
 ```
+
 This option is available so that, in combination with `--delete-policy` and `--watched-first`, recordings can be listed in the order that they would be deleted. This can help determine which delete policy is preferred.
 
 No space check or deletion happens when this option is used.
 
-# Usage Guide
+An alternative to this is to run with the `-n/--dry-run` argument. This will prevent the program from actually deleting anything, while showing what it would delete.
+
+# Command-Line Usage
 
 ```
 usage: hdhr_monitor_disk_space.py [-h]
-                                  [-d DEVICE_ID|IP|HOSTNAME|ALL [DEVICE_ID|IP|HOSTNAME|ALL ...]]
-                                  [-f FILE] [-m {report,maintain}]
-                                  [-i SECONDS] [-c NUMBER]
+                                  [-d DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...]]
+                                  [-f FILE] [-i SECONDS] [-c NUMBER]
                                   [-g GIGABYTES | -p PERCENT]
                                   [-s {age,category}] [-w] [-o SECONDS] [-l]
-                                  [-V] [-q | -v]
+                                  [-n] [-V] [-q | -v]
 
-Monitor disk space utilization of one or more HDHomeRun SCRIBE, SERVIO, and/or
-RECORD devices. Optionally delete recordings to stay above a specified free
-space minimum.
+Monitor disk space utilization of HDHomeRun SCRIBE, SERVIO, and RECORD
+devices. Optionally delete recordings to stay above a specified free space
+minimum, get rid of recordings older than a maximum age, or keep only a
+certain number of episodes.
 
 optional arguments:
   -h, --help            show this help message and exit
-  -d DEVICE_ID|IP|HOSTNAME|ALL [DEVICE_ID|IP|HOSTNAME|ALL ...], --device-id DEVICE_ID|IP|HOSTNAME|ALL [DEVICE_ID|IP|HOSTNAME|ALL ...]
+  -d DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...], --device-id DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...]
                         ID, IP address, or hostname of device(s) to monitor.
-                        Default is "discover" which discovers devices on the
-                        local network and monitors the first device found with
-                        a StorageID. If "ALL" is specified, then all devices
-                        found with StorageID will be monitored.
+                        Default is "discover" which discovers all storage
+                        devices on the local network.
   -f FILE, --conf-file FILE
                         Path to configuration file. The configuration file
-                        supports overriding the built-in defaults, as well as
-                        per-device settings. See example. Per-device settings
-                        are applied when a device ID is specified using
-                        -d/--device-id. Options given on the command-line
-                        override those in the configuration file.
-  -m {report,maintain}, --mode {report,maintain}
-                        Mode of operation. "report" mode reports disk space
-                        utilization periodically. "maintain" mode reports disk
-                        space utilization, and also maintains a minimum amount
-                        of free space by deleting recordings when less than
-                        the minimum amount of free space is available. Deleted
-                        recordings are set to record again. Default is
-                        "report".
+                        supports overriding the built-in defaults, per-device
+                        settings, as well as some settings not available on
+                        the command-line. See example. Options given on the
+                        command-line override those in the configuration file.
   -i SECONDS, --interval SECONDS
                         Number of seconds between space utilization reports.
-                        Default is 600.
+                        Default is 600. This can be set per-device in the
+                        configuration file.
   -c NUMBER, --count NUMBER
                         Number of space utilization reports to print before
                         stopping. Default is to continue forever. To disable
-                        regular reports in maintain mode, set this to zero
-                        (0).
+                        regular reports, set this to zero (0). This can be
+                        set per-device in the configuration file.
   -g GIGABYTES, --gigabytes-free GIGABYTES
-                        Minimum number of free gigabytes (GB) of disk space to
-                        maintain. Only applicable in maintain mode. Cannot be
-                        used in combination with -p/--percent-free.
+                        Minimum number of gigabytes (GB) of free disk space to
+                        maintain. Causes a maintenance cycle to be run which
+                        will delete recordings when the minimum amount of free
+                        space is not available. Cannot be used in combination
+                        with -p/--percent-free. This can be set per-device in
+                        the configuration file.
   -p PERCENT, --percent-free PERCENT
                         Minimum percentage of free disk space to maintain.
-                        Only applicable in maintain mode. Cannot be used in
-                        combination with -g/--gigabytes-free. Default is 2.0,
-                        if neither gigabytes or percent are specified.
+                        Causes a maintenance cycle to be run which will delete
+                        recordings when the minimum amount of free space is
+                        not available. Cannot be used in combination with
+                        -g/--gigabytes-free. This can be set per-device in the
+                        configuration file.
   -s {age,category}, --delete-policy {age,category}
                         Delete policy / sort method. Determines how recordings
-                        are sorted when selecting one to delete in maintain
-                        mode. "age" sorts only on the age of the recordings.
-                        "category" sorts first by category ['news', 'series',
-                        'sport', 'movie', 'special'], then by age. Use in
-                        combination with -l/--list-recordings to determine
-                        which policy works best for your situation. Default is
-                        "age".
+                        are sorted when selecting one to delete when
+                        maintaining free disk space. "age" sorts only on the
+                        age of the recordings and selects the oldest for
+                        deletion. "category" sorts first by category ['news',
+                        'series', 'sport', 'movie', 'special'], then by age.
+                        Category order can be customized in the configuration
+                        file. Use in combination with -l/--list-recordings to
+                        determine which policy is preferred. Default is "age".
   -w, --watched-first   Delete watched recordings first, before applying the
                         selected delete policy. Default is to apply the
                         selected delete policy without regard to whether
-                        recordings are watched or not.
+                        recordings are watched or not. This can be set per-
+                        category in the configuration file.
   -o SECONDS, --watched-offset SECONDS
                         Threshold for considering a recording "watched". This
                         is the number of seconds remaining to be watched at
                         the end of a recording below which it is considered
-                        "watched". Default is 180 seconds (3 minutes).
+                        "watched". Default is 180 seconds (3 minutes). This
+                        can be set per-category in the configuration file.
   -l, --list-recordings
                         List recordings in the order that they would be
-                        deleted in maintain mode, and then exit. Use in
-                        combination with -s/--delete-policy and -w/--watched-
-                        first to determine which policy works best for your
-                        situation.
+                        deleted when maintaining free disk space, and then
+                        exit. Use in combination with -s/--delete-policy and
+                        -w/--watched-first to determine which policy is
+                        preferred.
+  -n, --dry-run         Run without actually deleting any recordings. Log
+                        messages will indicate that recordings are being
+                        deleted, but none will actually be deleted.
   -V, --version         Show version number and exit.
   -q, --quiet           Suppress all messages except errors.
   -v, --verbose         Print more informational messages. Free space and
                         delete messages are printed by default.
-
-The interval for free space checks in maintain mode is independent from the
-interval for disk utilization reports (-i/--interval). The maintenance runs in
-the background at an interval based on the amount of free space found during
-the last check. If there is a lot of space available, it will be a long time -
-maybe many hours - until the next check. If there is little free space
-available, it might be only a few seconds until the next check. This can be
-observed with verbose output enabled (-v/--verbose).
 ```

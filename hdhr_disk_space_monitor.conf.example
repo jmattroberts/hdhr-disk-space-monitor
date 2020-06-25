@@ -1,0 +1,310 @@
+##############################################################################
+# The DEFAULT section allows the setting of default values that will be used 
+# unless overridden at a device, category, or series level.
+# Both '=' and ':' can be used to delimit names and values.
+[DEFAULT]
+
+# Number of seconds between disk space utilization reports.
+# See also: count
+# Can be overridden per device .
+#interval = 600
+
+# Number of disk space utilization reports to display. When no value is set,
+# reports will continue until the monitor is stopped. If set to zero, no
+# reports will be written.
+# See also: interval
+# Can be overridden per device.
+#count =
+
+# Minimum number of gigabytes (10^9 B) of free disk space to maintain. 
+# Recordings will be deleted to maintain this minimum.
+# Mutually exclusive with percent_free.
+# See also: percent_free, delete_policy, watched_first
+# Can be overridden per device.
+#gigabytes_free =
+
+# Minimum percentage of disk space to keep free. Recordings will be deleted
+# to maintain this minimum.
+# Mutually exclusive with gigabytes_free.
+# See also: gigabytes_free, delete_policy, watched_first
+# Can be overridden per device.
+#percent_free =
+
+# Selection method to use when deleting a recording to maintain minimum free 
+# disk space.
+#
+# Options:
+#   age - select the oldest recording on the device for deletion
+#   category - select the oldest recording in the lowest order category, 
+#              according to the categories' delete_order
+#
+# See also: watched_first, delete_order, gigabytes_free, percent_free
+#delete_policy = age
+
+# If "watched_first" is set to "yes", then when recording needs to be selected
+# for deletion, watched episodes will be preferentially deleted before
+# unwatched episodes.
+# See also: watched_offset
+#watched_first = no
+
+# Control whether recordings deleted by this program are set to rerecord.
+# Can be overridden per category and series.
+#rerecord_deleted = yes
+
+# Set the maximum age in days for a recording. Any recording older than this 
+# will be deleted.
+# Can be overridden per category and series.
+#max_age_days = None
+
+# Set the number of episodes to keep per series. For example, if max_episodes
+# is set to "3", then when a 4th episode is recorded, the oldest will be
+# deleted to maintain a count of 3 episodes.
+# See also: watched_first
+# Can be overridden per category and series.
+#max_episodes = None
+
+# Threshold for considering a recording "watched". This is the number of
+# seconds remaining to be watched at the end of a recording below which it is
+# considered "watched".
+# See also: watched_first
+# Can be overridden per category and series.
+#watched_offset = 180
+
+
+##############################################################################
+# Each device can have its own section for overriding DEFAULT settings.
+# It's important to understand how device settings are looked up based on how
+# the devices are configured on the command-line:
+#
+#   discover - When devices are automatically discovered, HDHomeRun hardware
+#              products will be keyed by their 8-character device ID. RECORD
+#              software instances will be keyed by their IP address.
+#   explicit - When devices are named explicitly using the -d/--device-id
+#              argument, devices will be keyed by whatever is given on the
+#              command-line, be it device ID, IP address, or hostname.
+#
+# Name device sections accordingly.
+#
+[device:<device_id|ip_address|hostname>]
+
+# Number of seconds between disk space utilization reports.
+# See also: count
+#interval = 600
+
+# Number of disk space utilization reports to display. When no value is set,
+# reports will continue until the monitor is stopped. If set to zero, no
+# reports will be written.
+# See also: interval
+#count =
+
+# Minimum number of gigabytes (10^9 B) of free disk space to maintain. 
+# Recordings will be deleted to maintain this minimum.
+# Mutually exclusive with percent_free.
+# See also: percent_free, delete_policy, watched_first
+#gigabytes_free =
+
+# Minimum percentage of disk space to keep free. Mutually exclusive with
+# gigabytes_free. Recordings will be deleted to maintain this minimum.
+# Mutually exclusive with gigabytes_free.
+# See also: gigabytes_free, delete_policy, watched_first
+#percent_free =
+
+
+##############################################################################
+# Each category can have its own section for overriding DEFAULT settings. 
+# These categories are built into the HDHomeRun DVR software and each 
+# recording is automatically categorized.
+# 
+[category:news]
+
+# If "protected" is set to "yes", then recordings in this category are
+# protected from deletion by this program.
+#protected = no
+
+# Control whether recordings deleted by this program are set to rerecord.
+#rerecord_deleted = yes
+
+# Set the maximum age in days for a recording. Any recording older than this 
+# will be deleted.
+#max_age_days = None
+
+# Set the number of episodes to keep per series. For example, if max_episodes
+# is set to "3", then when a 4th episode is recorded, the oldest will be
+# deleted to maintain a count of 3 episodes.
+# See also: watched_first
+#max_episodes = None
+
+# Threshold for considering a recording "watched". This is the number of
+# seconds remaining to be watched at the end of a recording below which it is
+# considered "watched".
+# See also: watched_first
+#watched_offset = 180
+
+# Sort order for categories when delete_policy is set to "category". Episodes
+# in the category with the lowest delete_order will be deleted first.
+# See also: watched_first
+# Only valid for category.
+#delete_order = 0
+
+
+[category:series]
+
+# If "protected" is set to "yes", then recordings in this category are
+# protected from deletion by this program.
+#protected = no
+
+# Control whether recordings deleted by this program are set to rerecord.
+#rerecord_deleted = yes
+
+# Set the maximum age in days for a recording. Any recording older than this 
+# will be deleted.
+#max_age_days = None
+
+# Set the number of episodes to keep per series. For example, if max_episodes
+# is set to "3", then when a 4th episode is recorded, the oldest will be
+# deleted to maintain a count of 3 episodes.
+# See also: watched_first
+#max_episodes = None
+
+# Threshold for considering a recording "watched". This is the number of
+# seconds remaining to be watched at the end of a recording below which it is
+# considered "watched".
+# See also: watched_first
+#watched_offset = 180
+
+# Sort order for categories when delete_policy is set to "category". Episodes
+# in the category with the lowest delete_order will be deleted first.
+# See also: watched_first
+# Only valid for category.
+#delete_order = 1
+
+
+[category:sport]
+
+# If "protected" is set to "yes", then recordings in this category are
+# protected from deletion by this program.
+#protected = no
+
+# Control whether recordings deleted by this program are set to rerecord.
+#rerecord_deleted = yes
+
+# Set the maximum age in days for a recording. Any recording older than this 
+# will be deleted.
+#max_age_days = None
+
+# Set the number of episodes to keep per series. For example, if max_episodes
+# is set to "3", then when a 4th episode is recorded, the oldest will be
+# deleted to maintain a count of 3 episodes.
+# See also: watched_first
+#max_episodes = None
+
+# Threshold for considering a recording "watched". This is the number of
+# seconds remaining to be watched at the end of a recording below which it is
+# considered "watched".
+# See also: watched_first
+#watched_offset = 180
+
+# Sort order for categories when delete_policy is set to "category". Episodes
+# in the category with the lowest delete_order will be deleted first.
+# See also: watched_first
+# Only valid for category.
+#delete_order = 2
+
+
+[category:movie]
+
+# If "protected" is set to "yes", then recordings in this category are
+# protected from deletion by this program.
+#protected = no
+
+# Control whether recordings deleted by this program are set to rerecord.
+#rerecord_deleted = yes
+
+# Set the maximum age in days for a recording. Any recording older than this 
+# will be deleted.
+#max_age_days = None
+
+# Set the number of episodes to keep per series. For example, if max_episodes
+# is set to "3", then when a 4th episode is recorded, the oldest will be
+# deleted to maintain a count of 3 episodes.
+# See also: watched_first
+#max_episodes = None
+
+# Threshold for considering a recording "watched". This is the number of
+# seconds remaining to be watched at the end of a recording below which it is
+# considered "watched".
+# See also: watched_first
+#watched_offset = 180
+
+# Sort order for categories when delete_policy is set to "category". Episodes
+# in the category with the lowest delete_order will be deleted first.
+# See also: watched_first
+# Only valid for category.
+#delete_order = 3
+
+
+[category:special]
+
+# If "protected" is set to "yes", then recordings in this category are
+# from deletion by this program.
+#protected = no
+
+# Control whether recordings deleted by this program are set to rerecord.
+#rerecord_deleted = yes
+
+# Set the maximum age in days for a recording. Any recording older than this 
+# will be deleted.
+#max_age_days = None
+
+# Set the number of episodes to keep per series. For example, if max_episodes
+# is set to "3", then when a 4th episode is recorded, the oldest will be
+# deleted to maintain a count of 3 episodes.
+# See also: watched_first
+#max_episodes = None
+
+# Threshold for considering a recording "watched". This is the number of
+# seconds remaining to be watched at the end of a recording below which it is
+# considered "watched".
+# See also: watched_first
+#watched_offset = 180
+
+# Sort order for categories when delete_policy is set to "category". Episodes
+# in the category with the lowest delete_order will be deleted first.
+# See also: watched_first
+# Only valid for category.
+#delete_order = 4
+
+
+##############################################################################
+# Each series can have its own section for overriding category settings. 
+# The word "series" here has no association to the "series" category above.
+# Here, it's a generic term for any series, news show, movie, sporting event,
+# etc. with a unique* title.
+#
+# * Titles might not always be unique, so series_id can be used in place of
+#   title to guarantee a distinct match.
+# 
+[series:<title|series_id>]
+
+# If "protected" is set to "yes", then episodes of this show are protected
+# from deletion by this program.
+#protected = no
+
+# Control whether recordings deleted by this program are set to rerecord.
+#rerecord_deleted = yes
+
+# Set the maximum age in days for a recording. Any recording older than this 
+# will be deleted.
+#max_age_days = None
+
+# Set the number of episodes to keep per series. For example, if max_episodes
+# is set to "3", then when a 4th episode is recorded, the oldest will be
+# deleted to get back to 3 episodes.
+# See also: watched_first
+#max_episodes = None
+
+# Threshold for considering a recording "watched". This is the number of
+# seconds remaining to be watched at the end of a recording below which it is
+# considered "watched".
+# See also: watched_first
+#watched_offset = 180

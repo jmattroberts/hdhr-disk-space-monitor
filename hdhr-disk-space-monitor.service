@@ -1,0 +1,14 @@
+[Unit]
+Description=HDHomeRun Disk Space Monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+#User=<best to create a non-privileged user for this>
+ExecStart=/usr/local/bin/hdhr_disk_space_monitor -f /etc/hdhr_disk_space_monitor.conf
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

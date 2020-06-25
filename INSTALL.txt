@@ -1,0 +1,55 @@
+Installation
+=============================================================================
+
+1) Install Python 3 (https://www.python.org/downloads/)
+
+2) Use pip to install hdhr_disk_space_monitor from the internet:
+
+     pip install hdhr_disk_space_monitor
+
+   Or, if you've downloaded a source distribution:
+
+     pip install hdhr_disk_space_monitor-2.0.0.zip
+
+   Either of those will result in an executable script being installed in
+   your PATH which can invoke hdhr_disk_space_monitor.
+
+3) Verify installation with a couple of commands:
+
+     hdhr_disk_space_monitor --version
+     hdhr_disk_space_monitor --help
+
+
+Set-up and Configuration
+=============================================================================
+
+A sample configuration file and systemd service file will be installed. Look
+for them in locations such as the following, or grab them from GitHub
+(https://github.com/jmattroberts/hdhr-disk-space-monitor):
+
+  Linux/BSD:
+    /usr/share/hdhr_disk_space_monitor
+    /usr/local/share/hdhr_disk_space_monitor
+    $HOME/.local/share/hdhr_disk_space_monitor
+
+  Windows:
+    %ProgramFiles%\Python 3.8\share\hdhr_disk_space_monitor
+    %ProgramFiles(x86)%\Python 3.8\share\hdhr_disk_space_monitor
+    %LOCALAPPDATA%\Programs\Python\Python38\share\hdhr_disk_space_monitor
+    %LOCALAPPDATA%\Programs\Python\Python38-32\share\hdhr_disk_space_monitor
+    %LOCALAPPDATA%\Programs\Python\Python38-64\share\hdhr_disk_space_monitor
+    %APPDATA%\Python\share\hdhr_disk_space_monitor
+
+The systemd service file can be copied to /etc/systemd/system and modified as
+required. It is recommended that a dedicated, non-privileged user be created
+and the systemd service file be modified to specify that user. To start the
+service and ensure that it starts on reboot, run the following:
+
+  # systemctl enable hdhr_disk_space_monitor
+  # systemctl start hdhr_disk_space_monitor
+
+The example configuration file can be copied to any desired location and
+edited as required. Invoke the monitor with the -f/--conf-file argument to
+have the configuration file settings applied. E.g.:
+
+  hdhr_disk_space_monitor -f /etc/hdhr_disk_space_monitor.conf

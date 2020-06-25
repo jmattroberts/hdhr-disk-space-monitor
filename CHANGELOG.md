@@ -5,9 +5,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- Allow configuration of maximum recording age or number of recordings based on category
-- Allow configuration of maximum recording age or number of recordings per recording rule or series
 - Web UI to maintain configuration
+
+## [2.0.0] - 2020-06-25
+
+### Added
+- Allow configuration of maximum recording age or maximum number of recordings per series at the category or series level. See configuration file example.
+- The `-n/--dry-run` option has been added. This will prevent any recordings from being deleted, while the log messages will indicate what would have been deleted and why.
+- Source distribution now available on PyPI. Install with `pip install hdhr_disk_space_monitor`.
+
+### Changed
+- Invocation is no longer via "`hdhr_monitor_disk_space.py`". Assuming installation from the source distribution via pip, invoke as "`hdhr_disk_space_monitor`".
+- Device discovery default behavior has changed. Instead of finding and operating on just the first storage device found, now all storage devices found are monitored/maintained. Free space is maintained independently per device. Recordings are maintained across all devices as a whole.
+- `-p/--percent-free` no longer defaults to "2". It must be set explicitly, if desired.
+- Device labels in output messages now more closely align with how they appear on the device web pages.
+- Device discovery no longer makes any use of the hosted API. All traffic is confined to the local network.
+- Changed license to GPL2 after reusing some code from [Silicondust](https://github.com/Silicondust/script.hdhomerun.view)
+
+### Removed
+- The `-m/--mode` argument has been removed. The mode of operation is now implied by other arguments. If `-g/--gigabytes-free` or `-p/--percent-free` are specified, then disk space maintenance is performed. If `max_age_days` or `max_episodes` are set in the configuration file, then recording maintenance is performed.
+- The `-d/--device-id` no longer accepts "ALL". The default behavior is now to discover all storage devices.
 
 ## [1.5.0] - 2020-06-10
 
@@ -17,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- In maintain mode, if the requested count of reports (-c|--count) has been given, maintenance will continue to run. This allows a "quiet" maintain mode if the count is set to zero.
+- In maintain mode, after the requested number of reports (`-c|--count`) has been shown, maintenance will continue to run. This allows a "quiet" maintain mode if the count is set to zero.
 
 ## [1.4.0] - 2020-06-09
 
@@ -31,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Specify IP address or hostname instead of device ID
 - Support for RECORD devices/installations
-- Command-line option (-V|--version) to display version number
+- Command-line option (`-V|--version`) to display version number
 
 ### Changed
 
@@ -60,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Test suite
-- Command-line option (-c|--count) to limit number of disk space reports shown
+- Command-line option (`-c|--count`) to limit number of disk space reports shown
 
 ### Changed
 
