@@ -26,7 +26,7 @@ Also see the example configuration file available in the code. There are many co
 If not told to do anything else, the monitor will simply report disk space utilization every 10 minutes for all HDHomeRun storage devices found on the network.
 
 ```
-$ hdhr_monitor_disk_space.py
+$ hdhr_monitor_disk_space
 2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%)
 2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%)
 
@@ -39,7 +39,7 @@ $ hdhr_monitor_disk_space.py
 Tell the monitor the amount of free space to maintain, either by percentage (`-p/--percent-free`) or absolute gigabytes (`-g/--gigabytes-free`), and it will delete the oldest recording (configurable) when that amount is no longer free.
 
 ```
-$ hdhr_monitor_disk_space.py --gigabytes-free 10
+$ hdhr_monitor_disk_space --gigabytes-free 10
 2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%); Minimum Free: 10.00 GB (1.0%)
 2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 10.00 GB (0.9%)
 ```
@@ -79,7 +79,7 @@ percent_free: 25
 In either case above, if the configuration file is named /etc/hdhr_disk_space_monitor.conf, then the following would get it started:
 
 ```
-$ hdhr_monitor_disk_space.py --conf-file /etc/hdhr_disk_space_monitor.conf
+$ hdhr_monitor_disk_space --conf-file /etc/hdhr_disk_space_monitor.conf
 2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%); Minimum Free: 10.00 GB (1.0%)
 2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 267.50 GB (25.0%)
 ```
@@ -87,12 +87,12 @@ $ hdhr_monitor_disk_space.py --conf-file /etc/hdhr_disk_space_monitor.conf
 #### Option 3: Independent processes without configuration file.
 
 ```
-$ hdhr_monitor_disk_space.py --device-id 12345678 --gigabytes-free 10
+$ hdhr_monitor_disk_space --device-id 12345678 --gigabytes-free 10
 2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%); Minimum Free: 10.00 GB (1.0%)
 ```
 
 ```
-$ hdhr_monitor_disk_space.py --device-id 192.168.1.100 --percent-free 25
+$ hdhr_monitor_disk_space --device-id 192.168.1.100 --percent-free 25
 2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 267.50 GB (25.0%)
 ```
 
@@ -175,7 +175,7 @@ An alternative to this is to run with the `-n/--dry-run` argument. This will pre
 # Command-Line Usage
 
 ```
-usage: hdhr_monitor_disk_space.py [-h]
+usage: hdhr_monitor_disk_space [-h]
                                   [-d DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...]]
                                   [-f FILE] [-i SECONDS] [-c NUMBER]
                                   [-g GIGABYTES | -p PERCENT]
