@@ -1,11 +1,16 @@
 from setuptools import setup, find_packages
 from hdhr_disk_space_monitor import __about__
+from os import path
+
+this_directory = path.abspath(path.dirname(__file__))
+with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
   name=__about__.__name__,
   version=__about__.__version__,
   description=(__about__.__description__),
-  long_description='README.md',
+  long_description=long_description,
   long_description_content_type='text/markdown',
   url=__about__.__url__,
   author=__about__.__author__,
