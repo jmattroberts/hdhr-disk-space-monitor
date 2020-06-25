@@ -5,7 +5,7 @@ Installation
 
 2) Use pip to install hdhr_disk_space_monitor from the internet:
 
-     pip install hdhr_disk_space_monitor
+     pip install hdhr-disk-space-monitor
 
    Or, if you've downloaded a source distribution:
 
