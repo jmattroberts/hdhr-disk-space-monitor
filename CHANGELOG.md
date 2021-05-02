@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 - Web UI to maintain configuration
 
+## [2.1.0] - 2021-05-02
+
+### Added
+- Configuration file updates are automatically detected and read. A restart is no longer required after the configuration file has been updated.
+- Gracefully handle devices that are no longer reachable
+- Detect devices added to the network while running
+- The `-r/--list-series` option has been added. This will list series along with space used and number of episodes.
+
+### Fixed
+- If one device is not configured for free space maintenance, subsequent devices might not be maintained, even if configured
+- Recording maintenance might not start if settings are only at series level and none are at category level
+
 ## [2.0.0] - 2020-06-25
 
 ### Added

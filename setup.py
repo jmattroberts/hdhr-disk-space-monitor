@@ -17,15 +17,21 @@ setup(
   author_email=__about__.__email__,
   license=__about__.__license__,
   packages=find_packages(),
-  entry_points={'console_scripts': ['hdhr_disk_space_monitor=hdhr_disk_space_monitor.core:main']},
+  entry_points={'console_scripts':
+                ['hdhr_disk_space_monitor=hdhr_disk_space_monitor.core:main']
+                },
   classifiers=[
     'Programming Language :: Python :: 3',
-    'License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)',
+    'License :: OSI Approved :: '
+    'GNU General Public License v2 or later (GPLv2+)',
     'Operating System :: OS Independent',
     ],
   platforms=['any'],
   install_requires=[
     'requests',
     ],
-  data_files=[('share/hdhr_disk_space_monitor', ['hdhr_disk_space_monitor.conf.example', 'hdhr-disk-space-monitor.service' ])]
+  data_files=[('share/hdhr_disk_space_monitor',
+              ['hdhr_disk_space_monitor.conf.example',
+               'hdhr-disk-space-monitor.service']
+               )]
   )

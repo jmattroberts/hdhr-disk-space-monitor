@@ -360,6 +360,10 @@ class Device():
         """Device IP address"""
         return(self._ip_addr)
 
+    @property
+    def http_port(self):
+        return(self._base_url[self._base_url.rfind(':') + 1:])
+
     def _discover_url(self):
         """HTTP URL to get json-formatted data about the device"""
         return(getattr(self, '_base_url', '') + '/' + self._discover_uri)
@@ -399,9 +403,13 @@ class Device():
         response.raise_for_status()
         json = response.json()
         for key, attr in self._json_attr_str_map.items():
+            if hasattr(self, attr):
+                delattr(self, attr)
             if key in json:
                 setattr(self, attr, json[key])
         for key, attr in self._json_attr_int_map.items():
+            if hasattr(self, attr):
+                delattr(self, attr)
             if key in json:
                 setattr(self, attr, int(json[key]))
 
@@ -607,4 +615,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-# vim: set tabstop=8 softtabstop=0 expandtab shiftwidth=4 smarttab ai nu hls :
+# vim: set tabstop=8 softtabstop=0 expandtab shiftwidth=4 smarttab ai :

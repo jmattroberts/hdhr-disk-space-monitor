@@ -24,7 +24,7 @@ import subprocess
 import tempfile
 from hdhr_disk_space_monitor.core import binarysize, duration
 
-cmd_base = ['python', '-m', 'hdhr_disk_space_monitor.core', '--stop-after-reports']
+cmd_base = ['python', '-m', 'hdhr_disk_space_monitor.core', '--test-mode']
 
 class TestFunctions:
 
@@ -61,7 +61,7 @@ class TestFunctions:
 
 class TestCLISuccess:
 
-    def run_cli_test(self, args, expected_output, expected_stderr=['WARNING This is a dry-run. No recordings will be deleted, even if log messages indicate that they are.']):
+    def run_cli_test(self, args, expected_output, expected_stderr=['WARNING This is a dry-run. No recordings will be deleted, even if log messages indicate otherwise.']):
 
         args.append('--dry-run')
         cmd = [*cmd_base, *args]
@@ -85,8 +85,8 @@ class TestCLISuccess:
         fd, file_name = tempfile.mkstemp()
         os.close(fd)
 
-        args = ['--verbose', '--count', '1', '--conf-file', file_name]
-        expected_output = ["Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+        args = ['--verbose', '--conf-file', file_name]
+        expected_output = ["Disk space utilization will be reported every 10 minutes",
                            "Total: "
                            ]
         try:
@@ -103,14 +103,14 @@ class TestCLISuccess:
 
     def test_cli_bare(self):
 
-        args= ['--count', '1']
+        args= []
         expected_output = ["Total: "]
         self.run_cli_test(args, expected_output)
 
     def test_cli_interval_5(self):
 
-        args = ['--verbose', '--count', '1', '--interval', '5']
-        expected_output = ["Disk space utilization will be reported every 5 seconds, stopping after 1 report",
+        args = ['--verbose', '--interval', '5']
+        expected_output = ["Disk space utilization will be reported every 5 seconds",
                            "Total: "
                            ]
         self.run_cli_test(args, expected_output)
@@ -131,9 +131,9 @@ class TestCLISuccess:
 
     def test_cli_gigabytes_free_5(self):
 
-        args = ['--verbose', '--count', '1', '--gigabytes-free', '5']
+        args = ['--verbose', '--gigabytes-free', '5']
         expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.00 GB.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+                           "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
                            ]
@@ -141,9 +141,9 @@ class TestCLISuccess:
 
     def test_cli_percent_free_1(self):
 
-        args = ['--verbose', '--count', '1', '--percent-free', '1']
+        args = ['--verbose', '--percent-free', '1']
         expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 1.0%.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+                           "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
                            ]
@@ -151,9 +151,9 @@ class TestCLISuccess:
 
     def test_cli_delete_policy_age(self):
 
-        args = ['--verbose', '--count', '1', '--percent-free', '2', '--delete-policy', 'age']
+        args = ['--verbose', '--percent-free', '2', '--delete-policy', 'age']
         expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+                           "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
                            ]
@@ -161,9 +161,9 @@ class TestCLISuccess:
 
     def test_cli_delete_policy_category(self):
 
-        args = ['--verbose', '--count', '1', '--percent-free', '2', '--delete-policy', 'category']
+        args = ['--verbose', '--percent-free', '2', '--delete-policy', 'category']
         expected_output = ["Recordings will be deleted according to category to maintain minimum free space of 2.0%.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+                           "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
                            ]
@@ -171,10 +171,10 @@ class TestCLISuccess:
 
     def test_cli_delete_watched_first(self):
 
-        args = ['--verbose', '--count', '1', '--percent-free', '2', '--watched-first']
+        args = ['--verbose', '--percent-free', '2', '--watched-first']
         expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
                            "Watched recordings will be deleted first.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+                           "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
                            ]
@@ -182,10 +182,10 @@ class TestCLISuccess:
 
     def test_cli_delete_watched_offset_5(self):
 
-        args = ['--verbose', '--count', '1', '--percent-free', '2', '--watched-first', '--watched-offset', '5']
+        args = ['--verbose', '--percent-free', '2', '--watched-first', '--watched-offset', '5']
         expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
                            "Watched recordings will be deleted first.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+                           "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
                            ]
@@ -193,20 +193,42 @@ class TestCLISuccess:
 
     def test_cli_delete_watched_offset_0(self):
 
-        args = ['--verbose', '--count', '1', '--percent-free', '2', '--watched-first', '--watched-offset', '0']
+        args = ['--verbose', '--percent-free', '2', '--watched-first', '--watched-offset', '0']
         expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
                            "Watched recordings will be deleted first.",
-                           "Disk space utilization will be reported every 10 minutes, stopping after 1 report",
+                           "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
                            ]
         self.run_cli_test(args, expected_output)
+
+    def test_cli_device_bad(self):
+
+        args = ['--device-id', 'AAAAAAAA']
+        expected_output = []
+        expected_stderr = ["ERROR Device not found: AAAAAAAA"]
+        self.run_cli_test(args, expected_output, expected_stderr)
+
+    def test_cli_device_bad_verbose(self):
+
+        args = ['--device-id', 'AAAAAAAA', '--verbose']
+        expected_output = []
+        expected_stderr = ["ERROR Device not found: AAAAAAAA"]
+        self.run_cli_test(args, expected_output, expected_stderr)
+
+    def test_cli_huge_gigabytes_free(self):
+
+        args = ['--gigabytes-free', '100000']
+        expected_output = ["Total: "]
+        expected_stderr = ["Minimum free space (100.00 TB) cannot be greater than device"]
+        self.run_cli_test(args, expected_output, expected_stderr)
 
 
 class TestCLIFailure:
 
     def run_cli_test(self, args, expected_stderr, expected_stdout=''):
 
+        args.append('--dry-run')
         cmd = [*cmd_base, *args]
         prcs = subprocess.run(cmd, capture_output=True)
 
@@ -230,28 +252,16 @@ class TestCLIFailure:
         os.close(fd)
         os.remove(file_name)
 
-        args = ['--count', '1', '--conf-file', file_name]
+        args = ['--conf-file', file_name]
         expected_stderr = ["usage:",
                 "error: argument -f/--conf-file: can't open",
                 "[Errno 2] No such file or directory:"
                            ]
         self.run_cli_test(args, expected_stderr)
 
-    def test_cli_device_bad(self):
-
-        args = ['--count', '1', '--device-id', 'AAAAAAAA']
-        expected_stderr = ["ERROR Device not found: AAAAAAAA"]
-        self.run_cli_test(args, expected_stderr)
-
-    def test_cli_device_bad_verbose(self):
-
-        args = ['--count', '1', '--device-id', 'AAAAAAAA', '--verbose']
-        expected_stderr = ["ERROR Device not found: AAAAAAAA"]
-        self.run_cli_test(args, expected_stderr)
-
     def test_cli_interval_0(self):
 
-        args = ['--count', '1', '--interval', '0']
+        args = ['--interval', '0']
         expected_stderr = ["usage:",
                            "error: argument -i/--interval: invalid interval value: '0'"
                            ]
@@ -259,7 +269,7 @@ class TestCLIFailure:
 
     def test_cli_interval_neg_5(self):
 
-        args = ['--count', '1', '--interval', '-5']
+        args = ['--interval', '-5']
         expected_stderr = ["usage:",
                            "error: argument -i/--interval: invalid interval value: '-5'",
                            ]
@@ -267,7 +277,7 @@ class TestCLIFailure:
 
     def test_cli_interval_x(self):
 
-        args = ['--count', '1', '--interval', 'x']
+        args = ['--interval', 'x']
         expected_stderr = ["usage:",
                            "error: argument -i/--interval: invalid interval value: 'x'"
                            ]
@@ -291,7 +301,7 @@ class TestCLIFailure:
 
     def test_cli_gigabytes_free_0(self):
 
-        args = ['--count', '1', '--gigabytes-free', '0']
+        args = ['--gigabytes-free', '0']
         expected_stderr = ["usage:",
                            "error: argument -g/--gigabytes-free: invalid gigabytes value: '0'"
                            ]
@@ -299,7 +309,7 @@ class TestCLIFailure:
 
     def test_cli_gigabytes_free_neg_5(self):
 
-        args = ['--count', '1', '--gigabytes-free', '-5']
+        args = ['--gigabytes-free', '-5']
         expected_stderr = ["usage:",
                            "error: argument -g/--gigabytes-free: invalid gigabytes value: '-5'"
                            ]
@@ -307,7 +317,7 @@ class TestCLIFailure:
 
     def test_cli_gigabytes_free_x(self):
 
-        args = ['--count', '1', '--gigabytes-free', 'x']
+        args = ['--gigabytes-free', 'x']
         expected_stderr = ["usage:",
                            "error: argument -g/--gigabytes-free: invalid gigabytes value: 'x'"
                            ]
@@ -315,7 +325,7 @@ class TestCLIFailure:
 
     def test_cli_percent_free_0(self):
 
-        args = ['--count', '1', '--percent-free', '0']
+        args = ['--percent-free', '0']
         expected_stderr = ["usage:",
                            "error: argument -p/--percent-free: invalid percent value: '0'"
                            ]
@@ -323,7 +333,7 @@ class TestCLIFailure:
 
     def test_cli_percent_free_neg_5(self):
 
-        args = ['--count', '1', '--percent-free', '-5']
+        args = ['--percent-free', '-5']
         expected_stderr = ["usage:",
                            "error: argument -p/--percent-free: invalid percent value: '-5'"
                            ]
@@ -331,7 +341,7 @@ class TestCLIFailure:
 
     def test_cli_percent_free_x(self):
 
-        args = ['--count', '1', '--percent-free', 'x']
+        args = ['--percent-free', 'x']
         expected_stderr = ["usage:",
                            "error: argument -p/--percent-free: invalid percent value: 'x'"
                            ]
@@ -339,7 +349,7 @@ class TestCLIFailure:
 
     def test_cli_percent_free_and_gigabytes_free_5(self):
 
-        args = ['--count', '1', '--percent-free', '5',
+        args = ['--percent-free', '5',
                '--gigabytes-free', '5']
         expected_stderr = ["usage:",
                            "error: argument -g/--gigabytes-free: not allowed with argument -p/--percent-free"
@@ -348,7 +358,7 @@ class TestCLIFailure:
 
     def test_cli_delete_policy_x(self):
 
-        args = ['--count', '1', '--delete-policy', 'x']
+        args = ['--delete-policy', 'x']
         expected_stderr = ["usage:",
                            "error: argument -s/--delete-policy: invalid delete_policy value: 'x'"
                            ]
@@ -356,7 +366,7 @@ class TestCLIFailure:
 
     def test_cli_delete_watched_offset_neg_5(self):
 
-        args = ['--count', '1', '--watched-first', '--watched-offset', '-5']
+        args = ['--watched-first', '--watched-offset', '-5']
         expected_stderr = ["usage:",
                            "error: argument -o/--watched-offset: invalid watched_offset value: '-5'"
                            ]
@@ -364,23 +374,16 @@ class TestCLIFailure:
 
     def test_cli_delete_watched_offset_x(self):
 
-        args = ['--count', '1', '--watched-first', '--watched-offset', 'x']
+        args = ['--watched-first', '--watched-offset', 'x']
         expected_stderr = ["usage:",
                            "error: argument -o/--watched-offset: invalid watched_offset value: 'x'"
                            ]
         self.run_cli_test(args, expected_stderr)
 
-    def test_huge_gigabytes_free(self):
-
-        args = ['--count', '1', '--gigabytes-free', '100000']
-        expected_stderr = ["ERROR Minimum free space (100.00 TB) cannot be greater than device"]
-        expected_stdout = ["Total:"]
-        self.run_cli_test(args, expected_stderr, expected_stdout)
-
 
 class TestConfSuccess:
 
-    def run_conf_test(self, conf, args=['--verbose', '--dry-run', '--count', '1'], expected_output='', expected_stderr=['WARNING This is a dry-run. No recordings will be deleted, even if log messages indicate that they are.']):
+    def run_conf_test(self, conf, args=[], expected_output='', expected_stderr=['WARNING This is a dry-run. No recordings will be deleted, even if log messages indicate otherwise.']):
 
         fd, file_name = tempfile.mkstemp()
         with os.fdopen(fd, 'w') as f:
@@ -388,6 +391,8 @@ class TestConfSuccess:
         #os.writev(fd, conf)
         #os.close(fd)
 
+        args.append('--verbose')
+        args.append('--dry-run')
         cmd = [*cmd_base, *args]
         cmd.append("--conf-file")
         cmd.append(file_name)
@@ -645,6 +650,16 @@ class TestConfSuccess:
                            ]
         self.run_conf_test(conf, expected_output=expected_output)
 
+    def test_conf_max_episodes_0(self):
+
+        conf = ('[category:news]\n'
+                'max_episodes = 0\n'
+                )
+        expected_output = ["Disk space utilization will be reported every 10 minutes",
+                           "Total: ",
+                           ]
+        self.run_conf_test(conf, expected_output=expected_output)
+
     def test_conf_max_episodes_5(self):
 
         conf = ('[category:news]\n'
@@ -688,7 +703,7 @@ class TestConfSuccess:
 
 class TestConfFailure:
 
-    def run_conf_test(self, conf, args=['--count', '1'], expected_output=''):
+    def run_conf_test(self, conf, args=[], expected_output=''):
 
         fd, file_name = tempfile.mkstemp()
         with os.fdopen(fd, 'w') as f:
@@ -696,6 +711,7 @@ class TestConfFailure:
         #os.writev(fd, conf)
         #os.close(fd)
 
+        args.append('--dry-run')
         cmd = [*cmd_base, *args]
         cmd.append("--conf-file")
         cmd.append(file_name)
@@ -856,14 +872,6 @@ class TestConfFailure:
                 'rerecord_deleted = x\n'
                 )
         expected_output = "Not a boolean: x"
-        self.run_conf_test(conf, expected_output=expected_output)
-
-    def test_conf_max_episodes_0(self):
-
-        conf = ('[category:news]\n'
-                'max_episodes = 0\n'
-                )
-        expected_output = "invalid max_episodes value: '0'"
         self.run_conf_test(conf, expected_output=expected_output)
 
     def test_conf_max_episodes_neg_60(self):
