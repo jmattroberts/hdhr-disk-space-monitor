@@ -20,8 +20,11 @@
 
 import subprocess
 
+
 def parse(data=None):
-    data = data or subprocess.check_output('ipconfig /all',startupinfo=getStartupInfo())
+    data = data or subprocess.check_output('ipconfig /all',
+                                           startupinfo=getStartupInfo()
+                                           )
     dlist = [d.rstrip() for d in data.split('\n')]
     mode = None
     sections = []
@@ -31,38 +34,40 @@ def parse(data=None):
             if not d:
                 continue
             elif not d.startswith(' '):
-                sections.append({'name':d.strip('.: ')})
+                sections.append({'name': d.strip('.: ')})
             elif d.startswith(' '):
                 if d.endswith(':'):
                     k = d.strip(':. ')
                     mode = 'VALUE:' + k
                     sections[-1][k] = ''
                 elif ':' in d:
-                    k,v = d.split(':',1)
+                    k, v = d.split(':', 1)
                     k = k.strip(':. ')
                     mode = 'VALUE:' + k
-                    v = v.replace('(Preferred)','')
+                    v = v.replace('(Preferred)', '')
                     sections[-1][k] = v.strip()
             elif mode and mode.startswith('VALUE:'):
                 if not d.startswith('        '):
                     mode = None
-                    dlist.insert(0,d)
+                    dlist.insert(0, d)
                     continue
-                k = mode.split(':',1)[-1]
-                v = d.replace('(Preferred)','')
+                k = mode.split(':', 1)[-1]
+                v = d.replace('(Preferred)', '')
                 sections[-1][k] += ',' + v.strip()
-        except:
+        except Exception:
             print(d)
             raise
 
     return sections[1:]
 
+
 def getStartupInfo():
-    if hasattr(subprocess,'STARTUPINFO'): #Windows
+    if hasattr(subprocess, 'STARTUPINFO'):  # Windows
         startupinfo = subprocess.STARTUPINFO()
         try:
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW #Suppress terminal window
-        except:
+            # Suppress terminal window
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        except Exception:
             startupinfo.dwFlags |= 1
         return startupinfo
 

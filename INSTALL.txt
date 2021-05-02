@@ -9,7 +9,7 @@ Installation
 
    Or, if you've downloaded a source distribution:
 
-     pip install hdhr_disk_space_monitor-2.0.0.zip
+     pip install hdhr_disk_space_monitor-2.1.0.zip
 
    Either of those will result in an executable script being installed in
    your PATH which can invoke hdhr_disk_space_monitor.

@@ -154,6 +154,14 @@ class Recording:
                f"filename={getattr(self, '_filename', '?')}>"
                )
 
+    def __eq__(self, other):
+        if not isinstance(other, Recording):
+            return(False)
+        return(self._filename == other._filename)
+
+    def __ne__(self, other):
+        return(not self.__eq__(other))
+
     @property
     def category(self):
         """Category of the recording"""
@@ -270,6 +278,19 @@ class Recording:
             url += '&rerecord=1'
         requests.post(url)
 
+    @property
+    def file_size(self):
+        """Size of file"""
+        if getattr(self, '_file_size', -1) == -1:
+            response = requests.head(self._play_url)
+            response.raise_for_status()
+            if 'Content-Length' in response.headers:
+                self._file_size = int(response.headers['Content-Length'])
+            else:
+                self._file_size = 0
+
+        return self._file_size
+
 
 def main():
 
@@ -321,4 +342,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-# vim: set tabstop=8 softtabstop=0 expandtab shiftwidth=4 smarttab ai nu hls :
+# vim: set tabstop=8 softtabstop=0 expandtab shiftwidth=4 smarttab ai :

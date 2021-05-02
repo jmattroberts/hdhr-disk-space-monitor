@@ -10,9 +10,10 @@ Monitor disk space utilization of HDHomeRun SCRIBE, SERVIO, and RECORD devices. 
  - [General Configuration](#general-configuration)
 	 - [Device Discovery/Selection](#device-discoveryselection)
 	 - [Space Maintenance Delete Policies](#space-maintenance-delete-policies)
-	 - [Delete Protection](#delete-protection)
 	 - [Watched Recordings](#watched-recordings)
+	 - [Delete Protection](#delete-protection)
 	 - [Listing Recordings](#listing-recordings)
+	 - [Listing Series](#listing-series)
  - [Command-Line Usage](#command-line-usage)
 
 Also see the example configuration file available in the code. There are many configuration options related to recording maintenance that are only available in the configuration file.
@@ -28,20 +29,19 @@ If not told to do anything else, the monitor will simply report disk space utili
 ```
 $ hdhr_monitor_disk_space
 2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%)
-2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%)
-
+2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100:43206] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%)
 ```
 
 ## Disk Space Maintenance
 
 ### "I want to make sure that my storage devices do not fill up."
 
-Tell the monitor the amount of free space to maintain, either by percentage (`-p/--percent-free`) or absolute gigabytes (`-g/--gigabytes-free`), and it will delete the oldest recording (configurable) when that amount is no longer free.
+Tell the monitor the amount of free space to maintain, either by percentage (`-p/--percent-free`) or absolute gigabytes (`-g/--gigabytes-free`), and it will delete a recording according to the [delete policy](#space-maintenance-delete-policies) when that amount is no longer free.
 
 ```
 $ hdhr_monitor_disk_space --gigabytes-free 10
 2020-06-19 22:08:51,967 [HDHomeRun SCRIBE QUATRO 12345678] Total: 999.71 GB; Used: 402.27 GB (40.2%); Free: 597.45 GB (59.8%); Minimum Free: 10.00 GB (1.0%)
-2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 10.00 GB (0.9%)
+2020-06-19 22:08:51,983 [HDHomeRun RECORD 192.168.1.100:43206] Total: 1.07 TB; Used: 218.65 GB (20.4%); Free: 854.56 GB (79.6%); Minimum Free: 10.00 GB (0.9%)
 ```
 
 Whenever a recording is deleted, it is reported, along with the reason.
@@ -142,12 +142,6 @@ There are 2 delete policies that can be applied to select a recording to be dele
 
 That category order can be altered by modifying the `delete_order` setting in the configuration file.
 
-## Delete Protection
-
-In the configuration file, any category or specific series can have `protected: yes` set. This will cause all episodes of that category or series to be protected from deletion by this program. This setting has no effect on the ability to delete recordings in the DVR UI,
-
-Also, any recording that is currently playing or is in the process of being recorded is protected from deletion.
-
 ## Watched Recordings
 
 ```
@@ -159,11 +153,16 @@ The delete policies described above do not take into account whether recordings 
 
 A recording is considered to be watched if there are fewer than 3 minutes remaining to be watched. This can be modified using the `--watched-offset` option.
 
+## Delete Protection
+
+In the configuration file, any category or specific series can have `protected: yes` set. This will cause all episodes of that category or series to be protected from deletion by this program. This setting has no effect on the ability to delete recordings in the DVR UI,
+
+Also, any recording that is currently playing or is in the process of being recorded is automatically protected from deletion.
+
 ## Listing Recordings
 
 ```
 --list-recordings
-
 ```
 
 This option is available so that, in combination with `--delete-policy` and `--watched-first`, recordings can be listed in the order that they would be deleted. This can help determine which delete policy is preferred.
@@ -172,15 +171,24 @@ No space check or deletion happens when this option is used.
 
 An alternative to this is to run with the `-n/--dry-run` argument. This will prevent the program from actually deleting anything, while showing what it would delete.
 
+## Listing Series
+
+```
+--list-series
+```
+
+List recorded series in order of increasing space utilization, along with the amount of space utilized and number of episodes. If watched recordings exist, the amount of space they occupy will also be printed.
+
+No space check or deletion happens when this option is used.
+
 # Command-Line Usage
 
 ```
-usage: hdhr_monitor_disk_space [-h]
-                                  [-d DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...]]
-                                  [-f FILE] [-i SECONDS] [-c NUMBER]
-                                  [-g GIGABYTES | -p PERCENT]
-                                  [-s {age,category}] [-w] [-o SECONDS] [-l]
-                                  [-n] [-V] [-q | -v]
+usage: hdhr_disk_space_monitor [-h]
+                               [-d DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...]]
+                               [-f FILE] [-i SECONDS] [-c NUMBER]
+                               [-g GIGABYTES | -p PERCENT] [-s {age,category}]
+                               [-w] [-o SECONDS] [-l] [-r] [-n] [-V] [-q | -v]
 
 Monitor disk space utilization of HDHomeRun SCRIBE, SERVIO, and RECORD
 devices. Optionally delete recordings to stay above a specified free space
@@ -206,8 +214,8 @@ optional arguments:
   -c NUMBER, --count NUMBER
                         Number of space utilization reports to print before
                         stopping. Default is to continue forever. To disable
-                        regular reports, set this to zero (0). This can be
-                        set per-device in the configuration file.
+                        regular reports, set this to zero (0). This can be set
+                        per-device in the configuration file.
   -g GIGABYTES, --gigabytes-free GIGABYTES
                         Minimum number of gigabytes (GB) of free disk space to
                         maintain. Causes a maintenance cycle to be run which
@@ -249,11 +257,14 @@ optional arguments:
                         exit. Use in combination with -s/--delete-policy and
                         -w/--watched-first to determine which policy is
                         preferred.
+  -r, --list-series     List recorded series in order of increasing space
+                        utilization, along with the amount of space utilized,
+                        and then exit. If watched recordings exist, the amount
+                        of space they occupy will also be printed.
   -n, --dry-run         Run without actually deleting any recordings. Log
                         messages will indicate that recordings are being
                         deleted, but none will actually be deleted.
   -V, --version         Show version number and exit.
   -q, --quiet           Suppress all messages except errors.
   -v, --verbose         Print more informational messages. Free space and
-                        delete messages are printed by default.
-```
+                        delete messages are printed by default.```

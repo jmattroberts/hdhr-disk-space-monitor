@@ -24,7 +24,23 @@ import socket
 import sys
 
 from collections.abc import namedtuple
-from ctypes import *
+from ctypes import POINTER
+from ctypes import Structure
+from ctypes import Union
+from ctypes import c_char_p
+from ctypes import c_void_p
+from ctypes import cdll
+from ctypes import c_short
+from ctypes import c_int
+from ctypes import c_uint
+from ctypes import c_uint8
+from ctypes import c_uint16
+from ctypes import c_uint32
+from ctypes import sizeof
+from ctypes import pointer
+from ctypes import memmove
+from ctypes import byref
+
 
 class sockaddr_in(Structure):
     _fields_ = [
@@ -40,8 +56,9 @@ class sockaddr_in(Structure):
             assert self.sin_len >= sizeof(sockaddr_in)
             data = ''.join(map(chr, self.sin_addr))
             return socket.inet_ntop(socket.AF_INET, data)
-        except:
+        except Exception:
             return ''
+
 
 class sockaddr_in6(Structure):
     _fields_ = [
@@ -58,8 +75,9 @@ class sockaddr_in6(Structure):
             assert self.sin6_len >= sizeof(sockaddr_in6)
             data = ''.join(map(chr, self.sin6_addr))
             return socket.inet_ntop(socket.AF_INET6, data)
-        except:
+        except Exception:
             return ''
+
 
 class sockaddr_dl(Structure):
     _fields_ = [
@@ -78,12 +96,14 @@ class sockaddr_dl(Structure):
         addrdata = self.sdl_data[self.sdl_nlen:self.sdl_nlen+self.sdl_alen]
         return ':'.join('%02x' % x for x in addrdata)
 
+
 class sockaddr_storage(Structure):
     _fields_ = [
         ('sa_len',      c_uint8),
         ('sa_family',   c_uint8),
         ('sa_data',     c_uint8 * 254)
     ]
+
 
 class sockaddr(Union):
     _anonymous_ = ('sa_storage', )
@@ -107,11 +127,15 @@ class sockaddr(Union):
             return str(self.sa_sdl)
         else:
             print(family)
-            raise NotImplementedError("address family %d not supported" % family)
+            raise NotImplementedError(
+                    "address family %d not supported" % family
+                    )
 
 
 class ifaddrs(Structure):
     pass
+
+
 ifaddrs._fields_ = [
     ('ifa_next',        POINTER(ifaddrs)),
     ('ifa_name',        c_char_p),
@@ -123,11 +147,11 @@ ifaddrs._fields_ = [
 ]
 
 # Define constants for the most useful interface flags (from if.h).
-IFF_UP            = 0x0001
-IFF_BROADCAST     = 0x0002
-IFF_LOOPBACK      = 0x0008
-IFF_POINTTOPOINT  = 0x0010
-IFF_RUNNING       = 0x0040
+IFF_UP = 0x0001
+IFF_BROADCAST = 0x0002
+IFF_LOOPBACK = 0x0008
+IFF_POINTTOPOINT = 0x0010
+IFF_RUNNING = 0x0040
 if sys.platform == 'darwin' or 'bsd' in sys.platform:
     IFF_MULTICAST = 0x8000
 elif sys.platform == 'linux':
@@ -151,9 +175,9 @@ def getifaddrs():
     Get local interface addresses.
 
     Returns generator of tuples consisting of interface name, interface flags,
-    address family (e.g. socket.AF_INET, socket.AF_INET6), address, and netmask.
-    The tuple members can also be accessed via the names 'name', 'flags',
-    'family', 'address', and 'netmask', respectively.
+    address family (e.g. socket.AF_INET, socket.AF_INET6), address, and
+    netmask. The tuple members can also be accessed via the names 'name',
+    'flags', 'family', 'address', and 'netmask', respectively.
     """
     # Get address information for each interface.
     addrlist = POINTER(ifaddrs)()
@@ -179,7 +203,8 @@ def getifaddrs():
             netmask = sockaddr()
             memmove(byref(netmask), ifaddr.contents.ifa_netmask,
                     ifaddr.contents.ifa_netmask.contents.sa_len)
-            if netmask.sa_family == socket.AF_INET and netmask.sa_len < sizeof(sockaddr_in):
+            if (netmask.sa_family == socket.AF_INET and
+                    netmask.sa_len < sizeof(sockaddr_in)):
                 netmask.sa_len = sizeof(sockaddr_in)
         else:
             netmask = None
@@ -202,5 +227,6 @@ def getifaddrs():
     # When we are done with the address list, ask libc to free whatever memory
     # it allocated for the list.
     libc.freeifaddrs(addrlist)
+
 
 __all__ = ['getifaddrs'] + [n for n in dir() if n.startswith('IFF_')]
