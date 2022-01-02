@@ -1,11 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 - Web UI to maintain configuration
+
+## [2.2.0] - 2022-01-01
+
+### Added
+- Output for `-l/--list-recordings` and `-r/--list-series` is now table-formatted, rather than comma-separated
+- The `min_age_days` configuration setting has been added. Protect new recordings from automatic deletion for a period of time. Recordings less than `min_age_days` days old will be protected as if `protected = yes` were set. This does not apply to recordings that are watched according to the `watched_offset`.
+- The `unwatched` option for `rerecord_deleted` configuration setting has been added. When set, only unwatched recordings that are deleted automatically will be set to rerecord.
+
+### Fixed
+- Improved resilience to network problems
 
 ## [2.1.0] - 2021-05-02
 

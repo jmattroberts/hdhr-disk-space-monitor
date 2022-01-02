@@ -29,6 +29,7 @@ setup(
   platforms=['any'],
   install_requires=[
     'requests',
+    'rich',
     ],
   data_files=[('share/hdhr_disk_space_monitor',
               ['hdhr_disk_space_monitor.conf.example',

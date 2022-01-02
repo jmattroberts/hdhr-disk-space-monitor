@@ -22,24 +22,24 @@
 import os
 import subprocess
 import tempfile
-from hdhr_disk_space_monitor.core import binarysize, duration
+from hdhr_disk_space_monitor.core import decimalsize, duration
 
 cmd_base = ['python', '-m', 'hdhr_disk_space_monitor.core', '--test-mode']
 
 class TestFunctions:
 
-    def test_binarysize(self):
+    def test_decimalsize(self):
 
-        assert binarysize(0) == '0.00 B'
-        assert binarysize(0,0) == '0 B'
-        assert binarysize(373,0) == '373 B'
-        assert binarysize(10**3) == '1.00 KB'
-        assert binarysize(10**3 * 1.5,1) == '1.5 KB'
-        assert binarysize(10**3 * 678,1) == '678.0 KB'
-        assert binarysize(10**6) == '1.00 MB'
-        assert binarysize(10**6 * 5.25) == '5.25 MB'
-        assert binarysize(10**9 * 837.33333) == '837.33 GB'
-        assert binarysize(10**12 * 37.376) == '37.38 TB'
+        assert decimalsize(0) == '0.00 B'
+        assert decimalsize(0,0) == '0 B'
+        assert decimalsize(373,0) == '373 B'
+        assert decimalsize(10**3) == '1.00 KB'
+        assert decimalsize(10**3 * 1.5,1) == '1.5 KB'
+        assert decimalsize(10**3 * 678,1) == '678.0 KB'
+        assert decimalsize(10**6) == '1.00 MB'
+        assert decimalsize(10**6 * 5.25) == '5.25 MB'
+        assert decimalsize(10**9 * 837.33333) == '837.33 GB'
+        assert decimalsize(10**12 * 37.376) == '37.38 TB'
 
     def test_duration(self):
 
@@ -118,21 +118,21 @@ class TestCLISuccess:
     def test_cli_count_3(self):
 
         args = ['--verbose', '--count', '3', '--interval', '1']
-        expected_output = ["Disk space utilization will be reported every 1 second, stopping after 3 reports",
+        expected_output = ["Disk space utilization will be reported every 1 second and will stop after 3 reports",
                            "Total: "
                            ]
         self.run_cli_test(args, expected_output)
 
     def test_cli_count_0(self):
 
-        args = ['--verbose', '--count', '0']
-        expected_output = ""
+        args = ['--verbose', '--count', '0', '--interval', '1']
+        expected_output = ["Disk space utilization will be reported every 1 second and will stop after 0 reports"]
         self.run_cli_test(args, expected_output)
 
     def test_cli_gigabytes_free_5(self):
 
         args = ['--verbose', '--gigabytes-free', '5']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.00 GB.",
+        expected_output = ["A minimum of 5.00 GB free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -142,7 +142,7 @@ class TestCLISuccess:
     def test_cli_percent_free_1(self):
 
         args = ['--verbose', '--percent-free', '1']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 1.0%.",
+        expected_output = ["A minimum of 1.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -152,7 +152,8 @@ class TestCLISuccess:
     def test_cli_delete_policy_age(self):
 
         args = ['--verbose', '--percent-free', '2', '--delete-policy', 'age']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
+                           
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -162,7 +163,7 @@ class TestCLISuccess:
     def test_cli_delete_policy_category(self):
 
         args = ['--verbose', '--percent-free', '2', '--delete-policy', 'category']
-        expected_output = ["Recordings will be deleted according to category to maintain minimum free space of 2.0%.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to category to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -172,8 +173,7 @@ class TestCLISuccess:
     def test_cli_delete_watched_first(self):
 
         args = ['--verbose', '--percent-free', '2', '--watched-first']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
-                           "Watched recordings will be deleted first.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age (watched recordings will be deleted first) to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -183,8 +183,7 @@ class TestCLISuccess:
     def test_cli_delete_watched_offset_5(self):
 
         args = ['--verbose', '--percent-free', '2', '--watched-first', '--watched-offset', '5']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
-                           "Watched recordings will be deleted first.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age (watched recordings will be deleted first) to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -194,8 +193,7 @@ class TestCLISuccess:
     def test_cli_delete_watched_offset_0(self):
 
         args = ['--verbose', '--percent-free', '2', '--watched-first', '--watched-offset', '0']
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
-                           "Watched recordings will be deleted first.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age (watched recordings will be deleted first) to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -419,7 +417,7 @@ class TestConfSuccess:
         conf = ('[DeFaUlT]\n'
                 'pERcenT_frEe = 2\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -452,7 +450,7 @@ class TestConfSuccess:
                 'count = 3\n'
                 )
         args = ['--verbose', '--dry-run']
-        expected_output = ["Disk space utilization will be reported every 1 second, stopping after 3 reports",
+        expected_output = ["Disk space utilization will be reported every 1 second and will stop after 3 reports",
                            "Total: "
                            ]
         self.run_conf_test(conf, args, expected_output=expected_output)
@@ -473,7 +471,7 @@ class TestConfSuccess:
                 'count = 0\n'
                 )
         args = ['--verbose', '--dry-run']
-        expected_output = ""
+        expected_output = ["Disk space utilization will be reported every 10 minutes and will stop after 0 reports"]
         self.run_conf_test(conf, args, expected_output=expected_output)
 
     def test_conf_gigabytes_free_5(self):
@@ -481,7 +479,7 @@ class TestConfSuccess:
         conf = ('[DEFAULT]\n'
                 'gigabytes_free = 5\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 5.00 GB.",
+        expected_output = ["A minimum of 5.00 GB free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -503,7 +501,7 @@ class TestConfSuccess:
         conf = ('[DEFAULT]\n'
                 'percent_free = 1\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 1.0%.",
+        expected_output = ["A minimum of 1.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -537,7 +535,7 @@ class TestConfSuccess:
                 'percent_free = 2\n'
                 'delete_policy = age\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -550,8 +548,7 @@ class TestConfSuccess:
                 'percent_free = 2\n'
                 'delete_policy = category\n'
                 )
-        expected_output = ["Recordings will be deleted according to category to maintain minimum free space of 2.0%.",
-                           "Disk space utilization will be reported every 10 minutes",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to category to maintain minimum free space.",
                            "Total: ",
                            "Minimum Free: "
                            ]
@@ -563,8 +560,7 @@ class TestConfSuccess:
                 'percent_free = 2\n'
                 'watched_first = yes\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
-                           "Watched recordings will be deleted first.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age (watched recordings will be deleted first) to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -577,7 +573,7 @@ class TestConfSuccess:
                 'percent_free = 2\n'
                 'watched_first = no\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -590,7 +586,7 @@ class TestConfSuccess:
                 'percent_free = 2\n'
                 'watched_offset = 60\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -603,7 +599,7 @@ class TestConfSuccess:
                 'percent_free = 2\n'
                 'watched_offset = 0\n'
                 )
-        expected_output = ["Recordings will be deleted according to age to maintain minimum free space of 2.0%.",
+        expected_output = ["A minimum of 2.0% free space will be maintained. Recordings will be deleted according to age to maintain minimum free space.",
                            "Disk space utilization will be reported every 10 minutes",
                            "Total: ",
                            "Minimum Free: "
@@ -624,6 +620,16 @@ class TestConfSuccess:
 
         conf = ('[category:news]\n'
                 'protected = no\n'
+                )
+        expected_output = ["Disk space utilization will be reported every 10 minutes",
+                           "Total: ",
+                           ]
+        self.run_conf_test(conf, expected_output=expected_output)
+
+    def test_conf_rerecord_deleted_unwatched(self):
+
+        conf = ('[category:news]\n'
+                'rerecord_deleted = unwatched\n'
                 )
         expected_output = ["Disk space utilization will be reported every 10 minutes",
                            "Total: ",
@@ -674,6 +680,26 @@ class TestConfSuccess:
 
         conf = ('[category:news]\n'
                 'max_age_days = 5\n'
+                )
+        expected_output = ["Disk space utilization will be reported every 10 minutes",
+                           "Total: ",
+                           ]
+        self.run_conf_test(conf, expected_output=expected_output)
+
+    def test_conf_min_age_days_0(self):
+
+        conf = ('[category:news]\n'
+                'min_age_days = 0\n'
+                )
+        expected_output = ["Disk space utilization will be reported every 10 minutes",
+                           "Total: ",
+                           ]
+        self.run_conf_test(conf, expected_output=expected_output)
+
+    def test_conf_min_age_days_5(self):
+
+        conf = ('[category:news]\n'
+                'min_age_days = 5\n'
                 )
         expected_output = ["Disk space utilization will be reported every 10 minutes",
                            "Total: ",
@@ -912,6 +938,22 @@ class TestConfFailure:
                 'max_age_days = x\n'
                 )
         expected_output = "invalid max_age_days value: 'x'"
+        self.run_conf_test(conf, expected_output=expected_output)
+
+    def test_conf_min_age_days_neg_60(self):
+
+        conf = ('[category:news]\n'
+                'min_age_days = -60\n'
+                )
+        expected_output = "invalid min_age_days value: '-60'"
+        self.run_conf_test(conf, expected_output=expected_output)
+
+    def test_conf_min_age_days_x(self):
+
+        conf = ('[category:news]\n'
+                'min_age_days = x\n'
+                )
+        expected_output = "invalid min_age_days value: 'x'"
         self.run_conf_test(conf, expected_output=expected_output)
 
     def test_conf_delete_order_x(self):

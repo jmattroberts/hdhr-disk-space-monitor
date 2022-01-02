@@ -29,7 +29,7 @@ from hdhr_disk_space_monitor.const import BYTES_PER_MB
 from hdhr_disk_space_monitor.const import BYTES_PER_KB
 
 
-def binarysize(bytes, digits=2):
+def decimalsize(bytes, digits=2):
 
     fmt = '{:.' + str(digits) + 'f}'
 
@@ -51,7 +51,7 @@ def binarysize(bytes, digits=2):
 
     return(fmt.format(bytes / divisor))
 
-# End binarysize
+# End decimalsize
 
 
 def duration(seconds):

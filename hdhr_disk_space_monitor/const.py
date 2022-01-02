@@ -32,18 +32,28 @@ INFINITE_FUTURE = 999999999999  # UNIX time seconds
 
 DISCOVER_DEVICE_ID = 'discover'
 WILDCARD_DEVICE_ID = 'FFFFFFFF'
-DELETE_POLICIES = ['age', 'category']
+
+DELETE_BY_AGE = 'age'
+DELETE_BY_CATEGORY = 'category'
+DELETE_POLICY_OPTIONS = [DELETE_BY_AGE, DELETE_BY_CATEGORY]
+
+RERECORD_ALL = 'all'
+RERECORD_UNWATCHED = 'unwatched'
+RERECORD_NONE = 'none'
+RERECORD_DELETED_OPTIONS = [RERECORD_ALL, RERECORD_UNWATCHED, RERECORD_NONE]
+
 DEFAULT_DEVICE_ID = DISCOVER_DEVICE_ID
 DEFAULT_REPORT_INTERVAL = 10 * MINUTE_SECONDS
 DEFAULT_COUNT = None
 DEFAULT_GIGABYTES_FREE = None
 DEFAULT_PERCENT_FREE = None
-DEFAULT_DELETE_POLICY = DELETE_POLICIES[0]
+DEFAULT_DELETE_POLICY = DELETE_BY_AGE
 DEFAULT_WATCHED_FIRST = False
 DEFAULT_WATCHED_OFFSET = 3 * MINUTE_SECONDS
 DEFAULT_MAX_EPISODES = None
 DEFAULT_MAX_AGE_DAYS = None
-DEFAULT_RERECORD_DELETED = True
+DEFAULT_MIN_AGE_DAYS = None
+DEFAULT_RERECORD_DELETED = RERECORD_ALL
 DEFAULT_PROTECTED = False
 DEFAULT_GLOBAL_SETTINGS = {'delete_policy': DEFAULT_DELETE_POLICY,
                            'watched_first': DEFAULT_WATCHED_FIRST,
@@ -57,24 +67,34 @@ DEFAULT_CATEGORY_SETTINGS = {'protected': DEFAULT_PROTECTED,
                              'max_episodes': DEFAULT_MAX_EPISODES,
                              'watched_offset': DEFAULT_WATCHED_OFFSET,
                              'max_age_days': DEFAULT_MAX_AGE_DAYS,
+                             'min_age_days': DEFAULT_MIN_AGE_DAYS,
                              'rerecord_deleted': DEFAULT_RERECORD_DELETED,
                              }
+
 DEVICE_DISCOVERY_INTERVAL = 30
 CONFIG_FILE_CHECK_INTERVAL = 3
 MIN_SPACE_CHECK_INTERVAL = 3
 RECORDING_MAINT_INTERVAL = 13 * MINUTE_SECONDS
+RESTART_DELAY = 3
+
 MAX_STREAMS = {'HDVR': 4,
                'HHDD': 6,
-               'RECORD': 16
+               'RECORD': 16,
+               'HDFX': 4,
                }
 
 # Deletion proceeds in the order shown below when using the category
 # delete policy, unless overridden by category.delete_order configuration
-CATEGORY_LIST = ['news',
-                 'series',
-                 'sport',
-                 'movie',
-                 'special'
+CATEGORY_NEWS = 'news'
+CATEGORY_SERIES = 'series'
+CATEGORY_SPORT = 'sport'
+CATEGORY_MOVIE = 'movie'
+CATEGORY_SPECIAL = 'special'
+CATEGORY_LIST = [CATEGORY_NEWS,
+                 CATEGORY_SERIES,
+                 CATEGORY_SPORT,
+                 CATEGORY_MOVIE,
+                 CATEGORY_SPECIAL,
                  ]
 
 # This is the maximum bitrate for a stream (channel) as per the ATSC 1.0

@@ -47,9 +47,17 @@
 # See also: watched_offset
 #watched_first = no
 
-# Control whether recordings deleted by this program are set to rerecord.
+# Control whether recordings that are automatically deleted are set to rerecord.
+#
+# Options:
+#   all - all automatically deleted recordings will be set to rerecord ('yes'
+#         also accepted)
+#   unwatched - only unwatched recordings will be set to rerecord
+#   none - no automatically deleted recordings will be set to rerecord ('no'
+#          also accepted)
+#
 # Can be overridden per category and series.
-#rerecord_deleted = yes
+#rerecord_deleted = all
 
 # Set the maximum age in days for a recording. Any recording older than this 
 # will be deleted.
@@ -70,6 +78,11 @@
 # Can be overridden per category and series.
 #watched_offset = 180
 
+# Set the minimum age in days before a recording is eligible for automatic
+# deletion. Set to protect new recordings from being deleted too quickly.
+# Can be overridden per category and series.
+#min_age_days = 0
+
 
 ##############################################################################
 # Each device can have its own section for overriding DEFAULT settings.
@@ -84,11 +97,8 @@
 #              command-line, be it device ID, IP address, or hostname.
 #
 # Name device sections accordingly.
-#
-[device:<device_id|ip_address|hostname>]
 
-# Number of seconds between disk space utilization reports.
-# See also: count
+#[device:<device_id|ip_address|hostname>]
 #interval = 600
 
 # Number of disk space utilization reports to display. When no value is set,
@@ -114,15 +124,22 @@
 # Each category can have its own section for overriding DEFAULT settings. 
 # These categories are built into the HDHomeRun DVR software and each 
 # recording is automatically categorized.
-# 
+
 [category:news]
 
 # If "protected" is set to "yes", then recordings in this category are
 # protected from deletion by this program.
 #protected = no
 
-# Control whether recordings deleted by this program are set to rerecord.
-#rerecord_deleted = yes
+# Control whether recordings that are automatically deleted are set to rerecord.
+#
+# Options:
+#   all - all automatically deleted recordings will be set to rerecord ('yes'
+#         also accepted)
+#   unwatched - only unwatched recordings will be set to rerecord
+#   none - no automatically deleted recordings will be set to rerecord ('no'
+#          also accepted)
+#rerecord_deleted = all
 
 # Set the maximum age in days for a recording. Any recording older than this 
 # will be deleted.
@@ -139,6 +156,10 @@
 # considered "watched".
 # See also: watched_first
 #watched_offset = 180
+
+# Set the minimum age in days before a recording is eligible for automatic
+# deletion. Set to protect new recordings from being deleted too quickly.
+#min_age_days = 0
 
 # Sort order for categories when delete_policy is set to "category". Episodes
 # in the category with the lowest delete_order will be deleted first.
@@ -153,8 +174,15 @@
 # protected from deletion by this program.
 #protected = no
 
-# Control whether recordings deleted by this program are set to rerecord.
-#rerecord_deleted = yes
+# Control whether recordings that are automatically deleted are set to rerecord.
+#
+# Options:
+#   all - all automatically deleted recordings will be set to rerecord ('yes'
+#         also accepted)
+#   unwatched - only unwatched recordings will be set to rerecord
+#   none - no automatically deleted recordings will be set to rerecord ('no'
+#          also accepted)
+#rerecord_deleted = all
 
 # Set the maximum age in days for a recording. Any recording older than this 
 # will be deleted.
@@ -171,6 +199,10 @@
 # considered "watched".
 # See also: watched_first
 #watched_offset = 180
+
+# Set the minimum age in days before a recording is eligible for automatic
+# deletion. Set to protect new recordings from being deleted too quickly.
+#min_age_days = 0
 
 # Sort order for categories when delete_policy is set to "category". Episodes
 # in the category with the lowest delete_order will be deleted first.
@@ -185,8 +217,15 @@
 # protected from deletion by this program.
 #protected = no
 
-# Control whether recordings deleted by this program are set to rerecord.
-#rerecord_deleted = yes
+# Control whether recordings that are automatically deleted are set to rerecord.
+#
+# Options:
+#   all - all automatically deleted recordings will be set to rerecord ('yes'
+#         also accepted)
+#   unwatched - only unwatched recordings will be set to rerecord
+#   none - no automatically deleted recordings will be set to rerecord ('no'
+#          also accepted)
+#rerecord_deleted = all
 
 # Set the maximum age in days for a recording. Any recording older than this 
 # will be deleted.
@@ -203,6 +242,10 @@
 # considered "watched".
 # See also: watched_first
 #watched_offset = 180
+
+# Set the minimum age in days before a recording is eligible for automatic
+# deletion. Set to protect new recordings from being deleted too quickly.
+#min_age_days = 0
 
 # Sort order for categories when delete_policy is set to "category". Episodes
 # in the category with the lowest delete_order will be deleted first.
@@ -217,8 +260,15 @@
 # protected from deletion by this program.
 #protected = no
 
-# Control whether recordings deleted by this program are set to rerecord.
-#rerecord_deleted = yes
+# Control whether recordings that are automatically deleted are set to rerecord.
+#
+# Options:
+#   all - all automatically deleted recordings will be set to rerecord ('yes'
+#         also accepted)
+#   unwatched - only unwatched recordings will be set to rerecord
+#   none - no automatically deleted recordings will be set to rerecord ('no'
+#          also accepted)
+#rerecord_deleted = all
 
 # Set the maximum age in days for a recording. Any recording older than this 
 # will be deleted.
@@ -235,6 +285,10 @@
 # considered "watched".
 # See also: watched_first
 #watched_offset = 180
+
+# Set the minimum age in days before a recording is eligible for automatic
+# deletion. Set to protect new recordings from being deleted too quickly.
+#min_age_days = 0
 
 # Sort order for categories when delete_policy is set to "category". Episodes
 # in the category with the lowest delete_order will be deleted first.
@@ -249,8 +303,15 @@
 # from deletion by this program.
 #protected = no
 
-# Control whether recordings deleted by this program are set to rerecord.
-#rerecord_deleted = yes
+# Control whether recordings that are automatically deleted are set to rerecord.
+#
+# Options:
+#   all - all automatically deleted recordings will be set to rerecord ('yes'
+#         also accepted)
+#   unwatched - only unwatched recordings will be set to rerecord
+#   none - no automatically deleted recordings will be set to rerecord ('no'
+#          also accepted)
+#rerecord_deleted = all
 
 # Set the maximum age in days for a recording. Any recording older than this 
 # will be deleted.
@@ -267,6 +328,10 @@
 # considered "watched".
 # See also: watched_first
 #watched_offset = 180
+
+# Set the minimum age in days before a recording is eligible for automatic
+# deletion. Set to protect new recordings from being deleted too quickly.
+#min_age_days = 0
 
 # Sort order for categories when delete_policy is set to "category". Episodes
 # in the category with the lowest delete_order will be deleted first.
@@ -283,15 +348,22 @@
 #
 # * Titles might not always be unique, so series_id can be used in place of
 #   title to guarantee a distinct match.
-# 
-[series:<title|series_id>]
+
+#[series:<title|series_id>]
 
 # If "protected" is set to "yes", then episodes of this show are protected
 # from deletion by this program.
 #protected = no
 
-# Control whether recordings deleted by this program are set to rerecord.
-#rerecord_deleted = yes
+# Control whether recordings that are automatically deleted are set to rerecord.
+#
+# Options:
+#   all - all automatically deleted recordings will be set to rerecord ('yes'
+#         also accepted)
+#   unwatched - only unwatched recordings will be set to rerecord
+#   none - no automatically deleted recordings will be set to rerecord ('no'
+#          also accepted)
+#rerecord_deleted = all
 
 # Set the maximum age in days for a recording. Any recording older than this 
 # will be deleted.
@@ -308,3 +380,9 @@
 # considered "watched".
 # See also: watched_first
 #watched_offset = 180
+
+# Set the minimum age in days before a recording is eligible for automatic
+# deletion. Set to protect new recordings from being deleted too quickly.
+#min_age_days = 0
+
+

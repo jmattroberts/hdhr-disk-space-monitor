@@ -21,7 +21,12 @@ import collections.abc
 import configparser
 import re
 
-from hdhr_disk_space_monitor import const
+from .const import DELETE_POLICY_OPTIONS
+from .const import DEFAULT_GLOBAL_SETTINGS
+from .const import DEFAULT_DEVICE_SETTINGS
+from .const import DEFAULT_CATEGORY_SETTINGS
+from .const import CATEGORY_LIST
+from .const import RERECORD_DELETED_OPTIONS
 
 config_section_name_pattern = re.compile(r'(?P<type>[^:]+)((:(?P<id>.*))|$)')
 
@@ -97,8 +102,35 @@ def validate_count(string):
         raise ValueError(f'invalid count value: {string!r}')
 
 
+def rerecord_deleted(string):
+    xlater = {'1': 'all',
+              'yes': 'all',
+              'true': 'all',
+              'on': 'all',
+              '0': 'none',
+              'no': 'none',
+              'false': 'none',
+              'off': 'none',
+              }
+    if string in xlater.keys():
+        value = xlater[string]
+    else:
+        value = string
+    if value not in RERECORD_DELETED_OPTIONS:
+        raise ValueError()
+    return(value)
+
+
+def validate_rerecord_deleted(string):
+    try:
+        value = rerecord_deleted(string)
+        return(value)
+    except Exception:
+        raise ValueError(f'invalid rerecord_deleted value: {string!r}')
+
+
 def delete_policy(string):
-    if string not in const.DELETE_POLICIES:
+    if string not in DELETE_POLICY_OPTIONS:
         raise ValueError()
     return(string)
 
@@ -228,6 +260,27 @@ def validate_max_age_days(string):
     except Exception:
         raise ValueError(f'invalid max_age_days value: {string!r}')
 
+
+def min_age_days(string):
+    try:
+        value = int(string)
+    except Exception:
+        raise ValueError()
+    if (value < 0):
+        raise ValueError()
+    return(value)
+
+
+def validate_min_age_days(string):
+    try:
+        if string is None or string == '':
+            return(None)
+        else:
+            value = min_age_days(string)
+            return(value)
+    except Exception:
+        raise ValueError(f'invalid min_age_days value: {string!r}')
+
 # End duration
 
 
@@ -237,10 +290,8 @@ class Settings(collections.UserDict):
     def __init__(self, args, conf_file_path=None):
         super().__init__(self)
         self._args = args
+        self._config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
         if conf_file_path is not None:
-            self._config = configparser.ConfigParser(
-                             dict_type=CaseInsensitiveDict
-                             )
             try:
                 self._config.read(conf_file_path)
                 for section_name, config_section in self._config.items():
@@ -279,10 +330,15 @@ class Settings(collections.UserDict):
                         validate_max_age_days(self._config.get(section_name,
                                                                'max_age_days'
                                                                ))
+                    if 'min_age_days' in config_section:
+                        validate_min_age_days(self._config.get(section_name,
+                                                               'min_age_days'
+                                                               ))
                     if 'rerecord_deleted' in config_section:
-                        self._config.getboolean(section_name,
-                                                'rerecord_deleted'
-                                                )
+                        validate_rerecord_deleted(self._config.get(
+                                                    section_name,
+                                                    'rerecord_deleted'
+                                                    ))
                     if 'delete_order' in config_section:
                         validate_delete_order(self._config.get(section_name,
                                                                'delete_order'
@@ -295,10 +351,7 @@ class Settings(collections.UserDict):
     # End __init__
 
     def getConfig(self):
-        if self._config is None:
-            return {}
-        else:
-            return(self._config)
+        return(self._config)
 
     def __getitem__(self, key):
         if key not in self.data:
@@ -315,6 +368,9 @@ class Settings(collections.UserDict):
                 self._resolve_series_settings(section_id)
 
         return self.data[key]
+
+    def __contains__(self, key):
+        return bool(self.__getitem__(key))
 
     def _parse_global_conf(self, global_settings):
 
@@ -396,10 +452,16 @@ class Settings(collections.UserDict):
                                  section, 'max_age_days',
                                  fallback=category_settings['max_age_days']
                                  ))
-        category_settings['rerecord_deleted'] = self._config.getboolean(
+        category_settings['min_age_days'] = validate_min_age_days(
+                               self._config.get(
+                                 section, 'min_age_days',
+                                 fallback=category_settings['min_age_days']
+                                 ))
+        category_settings['rerecord_deleted'] = validate_rerecord_deleted(
+                               self._config.get(
                                  section, 'rerecord_deleted',
                                  fallback=category_settings['rerecord_deleted']
-                                 )
+                                 ))
         category_settings['delete_order'] = validate_delete_order(
                                self._config.get(
                                  section, 'delete_order',
@@ -440,17 +502,24 @@ class Settings(collections.UserDict):
             series_settings['max_age_days'] = validate_max_age_days(
                                                 max_age_days
                                                 )
-        rerecord_deleted = self._config.getboolean(section, 'rerecord_deleted',
-                                                   fallback=None
-                                                   )
+        min_age_days = self._config.get(section, 'min_age_days', fallback=None)
+        if min_age_days is not None:
+            series_settings['min_age_days'] = validate_min_age_days(
+                                                min_age_days
+                                                )
+        rerecord_deleted = self._config.get(section, 'rerecord_deleted',
+                                            fallback=None
+                                            )
         if rerecord_deleted is not None:
-            series_settings['rerecord_deleted'] = rerecord_deleted
+            series_settings['rerecord_deleted'] = validate_rerecord_deleted(
+                                                    rerecord_deleted
+                                                    )
 
     # End parse_series_conf
 
     def _resolve_global_settings(self):
 
-        global_settings = const.DEFAULT_GLOBAL_SETTINGS.copy()
+        global_settings = DEFAULT_GLOBAL_SETTINGS.copy()
         if self._config is not None:
             self._parse_global_conf(global_settings)
         if self._args.delete_policy is not None:
@@ -464,7 +533,7 @@ class Settings(collections.UserDict):
 
     def _resolve_device_settings(self, device_key):
 
-        device_settings = const.DEFAULT_DEVICE_SETTINGS.copy()
+        device_settings = DEFAULT_DEVICE_SETTINGS.copy()
         if self._config is not None:
             self._parse_device_conf(device_key, device_settings)
         if self._args.interval is not None:
@@ -484,12 +553,12 @@ class Settings(collections.UserDict):
 
         self.data[f'device:{device_key}'] = device_settings
 
-    # End update_device_settings
+    # End _resolve_device_settings
 
     def _resolve_category_settings(self, category_name):
 
-        category_settings = const.DEFAULT_CATEGORY_SETTINGS.copy()
-        category_settings['delete_order'] = const.CATEGORY_LIST.index(
+        category_settings = DEFAULT_CATEGORY_SETTINGS.copy()
+        category_settings['delete_order'] = CATEGORY_LIST.index(
                                               category_name
                                               )
         if self._config is not None:
@@ -499,7 +568,7 @@ class Settings(collections.UserDict):
 
         self.data[f'category:{category_name}'] = category_settings
 
-    # End update_category_settings
+    # End _resolve_category_settings
 
     def _resolve_series_settings(self, series_id):
 

@@ -195,7 +195,7 @@ devices. Optionally delete recordings to stay above a specified free space
 minimum, get rid of recordings older than a maximum age, or keep only a
 certain number of episodes.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -d DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...], --device-id DEVICE_ID|IP|HOSTNAME [DEVICE_ID|IP|HOSTNAME ...]
                         ID, IP address, or hostname of device(s) to monitor.
@@ -232,14 +232,14 @@ optional arguments:
                         configuration file.
   -s {age,category}, --delete-policy {age,category}
                         Delete policy / sort method. Determines how recordings
-                        are sorted when selecting one to delete when
-                        maintaining free disk space. "age" sorts only on the
-                        age of the recordings and selects the oldest for
-                        deletion. "category" sorts first by category ['news',
-                        'series', 'sport', 'movie', 'special'], then by age.
-                        Category order can be customized in the configuration
-                        file. Use in combination with -l/--list-recordings to
-                        determine which policy is preferred. Default is "age".
+                        are sorted when selecting one to delete to maintain
+                        free disk space. "age" sorts only on the age of the
+                        recordings and selects the oldest for deletion.
+                        "category" sorts first by category ['news', 'series',
+                        'sport', 'movie', 'special'], then by age. Category
+                        order can be customized in the configuration file. Use
+                        in combination with -l/--list-recordings to determine
+                        which policy is preferred. Default is "age".
   -w, --watched-first   Delete watched recordings first, before applying the
                         selected delete policy. Default is to apply the
                         selected delete policy without regard to whether
@@ -253,8 +253,8 @@ optional arguments:
                         can be set per-category in the configuration file.
   -l, --list-recordings
                         List recordings in the order that they would be
-                        deleted when maintaining free disk space, and then
-                        exit. Use in combination with -s/--delete-policy and
+                        deleted to maintain free disk space, and then exit.
+                        Use in combination with -s/--delete-policy and
                         -w/--watched-first to determine which policy is
                         preferred.
   -r, --list-series     List recorded series in order of increasing space
@@ -267,4 +267,5 @@ optional arguments:
   -V, --version         Show version number and exit.
   -q, --quiet           Suppress all messages except errors.
   -v, --verbose         Print more informational messages. Free space and
-                        delete messages are printed by default.```
+                        delete messages are printed by default.
+```

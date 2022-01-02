@@ -23,7 +23,6 @@ import argparse
 import logging
 import math
 import os
-# import pprint
 import re
 import socket
 import sys
@@ -31,43 +30,46 @@ import time
 
 from configparser import DEFAULTSECT
 from requests.exceptions import ConnectionError
-from hdhr_disk_space_monitor import __about__
-from hdhr_disk_space_monitor.const import ATSC_MAX_TUNER_Bps
-from hdhr_disk_space_monitor.const import BYTES_PER_GB
-from hdhr_disk_space_monitor.const import CATEGORY_LIST
-from hdhr_disk_space_monitor.const import DAY_SECONDS
-from hdhr_disk_space_monitor.const import DEFAULT_DELETE_POLICY
-from hdhr_disk_space_monitor.const import DEFAULT_DEVICE_ID
-from hdhr_disk_space_monitor.const import DEFAULT_REPORT_INTERVAL
-from hdhr_disk_space_monitor.const import DEFAULT_WATCHED_OFFSET
-from hdhr_disk_space_monitor.const import DELETE_POLICIES
-from hdhr_disk_space_monitor.const import DEVICE_DISCOVERY_INTERVAL
-from hdhr_disk_space_monitor.const import DISCOVER_DEVICE_ID
-from hdhr_disk_space_monitor.const import INFINITE_FUTURE
-from hdhr_disk_space_monitor.const import MAX_STREAMS
-from hdhr_disk_space_monitor.const import MIN_SPACE_CHECK_INTERVAL
-from hdhr_disk_space_monitor.const import RECORDING_MAINT_INTERVAL
-from hdhr_disk_space_monitor.const import WILDCARD_DEVICE_ID
-from hdhr_disk_space_monitor.settings import Settings
-from hdhr_disk_space_monitor.settings import interval
-from hdhr_disk_space_monitor.settings import count
-from hdhr_disk_space_monitor.settings import delete_policy
-from hdhr_disk_space_monitor.settings import gigabytes
-from hdhr_disk_space_monitor.settings import percent
-from hdhr_disk_space_monitor.settings import watched_offset
-from hdhr_disk_space_monitor.util import binarysize, duration
-from hdhr_disk_space_monitor.hdhr.devices import Devices
-from hdhr_disk_space_monitor.hdhr.recordings import RecordedSeries
-from hdhr_disk_space_monitor.hdhr.recordings import Recording
-from hdhr_disk_space_monitor.hdhr.recordings import MAX_RESUME_OFFSET
+from rich.console import Console
+# from rich.pretty import pprint
+from rich.table import Table
+from . import __about__
+from .const import ATSC_MAX_TUNER_Bps
+from .const import BYTES_PER_GB
+from .const import CATEGORY_LIST
+from .const import CONFIG_FILE_CHECK_INTERVAL
+from .const import DAY_SECONDS
+from .const import DEFAULT_DELETE_POLICY
+from .const import DEFAULT_DEVICE_ID
+from .const import DEFAULT_REPORT_INTERVAL
+from .const import DEFAULT_WATCHED_OFFSET
+from .const import DELETE_BY_CATEGORY
+from .const import DELETE_POLICY_OPTIONS
+from .const import DEVICE_DISCOVERY_INTERVAL
+from .const import DISCOVER_DEVICE_ID
+from .const import INFINITE_FUTURE
+from .const import MAX_STREAMS
+from .const import MIN_SPACE_CHECK_INTERVAL
+from .const import RECORDING_MAINT_INTERVAL
+from .const import RERECORD_ALL
+from .const import RERECORD_UNWATCHED
+from .const import RESTART_DELAY
+from .const import WILDCARD_DEVICE_ID
+from .settings import Settings
+from .settings import interval
+from .settings import count
+from .settings import delete_policy
+from .settings import gigabytes
+from .settings import percent
+from .settings import watched_offset
+from .util import decimalsize, duration
+from .hdhr.devices import Devices
+from .hdhr.recordings import RecordedSeries
+from .hdhr.recordings import Recording
+from .hdhr.recordings import MAX_RESUME_OFFSET
 
-args = None
 dry_run = False
 logger = None
-
-friendly_name_pattern = re.compile(r'HDHomeRun (?P<family>.*)')
-model_number_pattern = re.compile(r'(?P<family>[A-Z]{4})-(?P<version>.*)')
-config_section_name_pattern = re.compile(r'(?P<type>[^:]+)((:(?P<id>.*))|$)')
 
 
 class DeleteProtectedRecordingError(Exception):
@@ -75,10 +77,6 @@ class DeleteProtectedRecordingError(Exception):
 
 
 class DeletePlayingRecordingError(Exception):
-    pass
-
-
-class DeleteRecordingRecordingError(Exception):
     pass
 
 
@@ -212,10 +210,10 @@ def parse_args(argv):
       )
 
     parser.add_argument(
-      '-s', '--delete-policy', choices=DELETE_POLICIES,
+      '-s', '--delete-policy', choices=DELETE_POLICY_OPTIONS,
       type=delete_policy,
       help='Delete policy / sort method. Determines how recordings are '
-      'sorted when selecting one to delete when maintaining free disk '
+      'sorted when selecting one to delete to maintain free disk '
       'space. "age" sorts only on the age of the recordings and selects the '
       'oldest for deletion. "category" sorts first by category '
       f'{CATEGORY_LIST}, then by age. Category order can be customized '
@@ -244,8 +242,8 @@ def parse_args(argv):
 
     parser.add_argument(
       '-l', '--list-recordings', action='store_true',
-      help='List recordings in the order that they would be deleted when '
-      'maintaining free disk space, and then exit. Use in combination with '
+      help='List recordings in the order that they would be deleted to '
+      'maintain free disk space, and then exit. Use in combination with '
       '-s/--delete-policy and -w/--watched-first to determine which '
       'policy is preferred.'
       )
@@ -308,10 +306,11 @@ def resolve_series_settings(obj, settings):
     else:
         print(type(obj))
 
+    # Look for match on series ID first, since that's more precise
     series_settings = settings[f'category:{series_category}'].copy()
-    if settings[f'series:{series_id}']:
+    if settings.getConfig().has_section(f'series:{series_id}'):
         series_settings.update(settings[f'series:{series_id}'])
-    elif settings[f'series:{series_title}']:
+    elif settings.getConfig().has_section(f'series:{series_title}'):
         series_settings.update(settings[f'series:{series_title}'])
 
     return(series_settings)
@@ -320,6 +319,9 @@ def resolve_series_settings(obj, settings):
 
 
 def get_monitored_devices(desired_device_id_list, devices):
+
+    friendly_name_pattern = re.compile(r'HDHomeRun (?P<short_name>.*)')
+    model_number_pattern = re.compile(r'(?P<family>[A-Z]{4})-(?P<version>.*)')
 
     current_devices = devices
     discovered_devices = {}
@@ -331,14 +333,11 @@ def get_monitored_devices(desired_device_id_list, devices):
     else:
         device_id_list = desired_device_id_list.copy()
 
-    # We find and take care of 'discover' first, so we can save duplicate
-    # detection for the explicitly-named devices later.
+    # Find and take care of 'discover' first, so duplicate detection can be
+    # handled with the explicitly-named devices below.
     if DISCOVER_DEVICE_ID.upper() in (id.upper() for id in device_id_list):
         for device in storage_devices:
-            if device.id != '':
-                device_id = device.id
-            else:
-                device_id = device.ip_addr
+            device_id = device.id or device.ip_addr
             device_id_list.append(device_id)
 
     for device_id in device_id_list:
@@ -361,181 +360,198 @@ def get_monitored_devices(desired_device_id_list, devices):
             continue
         for discovered_key, discovered_device in discovered_devices.items():
             if discovered_device == device:
-                logger.debug(f'Device {device_id} is the same as device '
-                             f'{discovered_key}. Proceeding with only '
-                             f'{discovered_key}.'
-                             )
+                if discovered_key not in current_devices:
+                    # The intention is to show this only once, not on every
+                    # discovery cycle
+                    logger.warning(f'Device "{device_id}" is the same as '
+                                   f'device "{discovered_key}". Proceeding '
+                                   f'with only "{discovered_key}".'
+                                   )
                 break
         else:
             discovered_devices[device_id] = device
 
     devices = {}
-    for device_key, device in current_devices.items():
-        if device_key in discovered_devices:
-            # Refigure this in case the device suddenly STARTS reporting disk
-            # space (due to reconfig and restart between discoveries). If it
-            # suddenly STOPS, we'll let the main loop report that.
-            original_total_space = device.total_space
+    for device_key, device in current_devices.copy().items():
+        # Do a refresh to test response. Can't just test to see if it's 'in'
+        # the discovered devices because it's possible for a port to change,
+        # in which case the IP will still be found as a device key, but
+        # it's no longer responding on the original port.
+        # Sure, could do the 'in' test, then check for port match, but then
+        # the nice exception message is not available.
+        try:
             device.refresh()
-            if original_total_space is None and device.total_space is not None:
-                if device.space_report_due_time == INFINITE_FUTURE:
-                    device.space_report_due_time = time.time()
-                if device.maintenance_due_time == INFINITE_FUTURE:
-                    device.maintenance_due_time = time.time()
-            devices[device_key] = device  # Keep what we already have
-        else:
-            logger.warning(f'{device.tag} Device is no longer responding and '
-                           'will no longer be monitored'
-                           )
+        except ConnectionError as e:
+            # Remove here so it doesn't cause a false match in the 'for' loop
+            # below, where the IP matches, but the port does not
+            del current_devices[device_key]
+            logger.warning(f'{device.tag} Device is not responding: {e}')
 
     for device_key, device in discovered_devices.items():
         if device_key in current_devices:
-            continue  # Keep what we already have from above
+            # Keep what we already have
+            devices[device_key] = current_devices[device_key]
+            continue
+
+        # Add some custom attributes
+
+        # key
+        device.key = device_key
+
+        # tag
+        m = friendly_name_pattern.match(device.friendly_name)
+        short_name = m.group('short_name')
+        device.tag = f'[{short_name} '
+
+        if device.id != '':
+            device.tag += f'{device.id}'
+            if device_key != device.id:
+                device.tag += f' ({device_key})'
         else:
-            # Add some custom attributes
-            device.key = device_key
-            device.tag = f'[{device.friendly_name} '
+            device.tag += f'{device.ip_addr}:{device.http_port}'
+            if device_key != device.ip_addr:
+                device.tag += f' ({device_key})'
+        device.tag += ']'
 
-            if device.id != '':
-                device.tag += f'{device.id}'
-                if device_key != device.id:
-                    device.tag += f' ({device_key})'
-            else:
-                device.tag += f'{device.ip_addr}:{device.http_port}'
-                if device_key != device.ip_addr:
-                    device.tag += f' ({device_key})'
-            device.tag += ']'
-
-            if device.model_number != '':
-                m = model_number_pattern.match(device.model_number)
-            else:
-                m = friendly_name_pattern.match(device.friendly_name)
+        # model family
+        if device.model_number != '':
+            m = model_number_pattern.match(device.model_number)
             model_family = m.group('family')
+        else:
+            model_family = short_name
 
-            max_device_streams = (MAX_STREAMS[model_family])
-            device.max_recording_Bps = (ATSC_MAX_TUNER_Bps
-                                        * max_device_streams
-                                        )
-            device.space_report_count = 0
-            device.maintenance_count = 0
-            device.space_report_due_time = time.time()
-            device.maintenance_due_time = time.time()
+        # max bit rate
+        max_device_streams = (MAX_STREAMS[model_family]) or 4
+        device.max_recording_Bps = ATSC_MAX_TUNER_Bps * max_device_streams
 
-            devices[device_key] = device
+        # Defaults
+        device.min_free_space = 0
+        device.space_report_count = 0
+        device.maintenance_due_time = INFINITE_FUTURE
+        device.prior_space_report_time = 0
+        device.space_report_interval = -1
+        device.space_report_limit = -1
+        # These are brought down to the device level solely so that an old vs.
+        # new setting comparison can be done at the device level when
+        # refreshing settings.
+        device.global_delete_policy = None
+        device.global_watched_first = None
+
+        if device.total_space is None:
+            logger.warning(f'{device.tag} Device does not report disk space '
+                           'utilization'
+                           )
+
+        devices[device_key] = device
 
     return(devices)
 
 # End get_monitored_devices
 
 
-def sort_recordings_by_age(recordings, watched_first):
+def sort_recordings_for_deletion(recordings, settings):
 
-    if watched_first:
-        sorted_recordings = sorted(recordings,
-                                   key=lambda r: (
-                                     getattr(r, 'is_protected', False),
-                                     -getattr(r, 'is_watched', False),
-                                     getattr(r, 'start_time')
-                                     ))
-    else:
-        sorted_recordings = sorted(recordings,
-                                   key=lambda r: (
-                                     getattr(r, 'is_protected', False),
-                                     getattr(r, 'start_time')
-                                     ))
+    dummy_attr_name = 'surely_there_will_never_be_an_attr_with_this_name'
+    watched_attr_name = dummy_attr_name
+    category_attr_name = dummy_attr_name
+
+    if settings['global']['watched_first']:
+        watched_attr_name = 'is_watched'
+
+    if settings['global']['delete_policy'] == DELETE_BY_CATEGORY:
+        category_attr_name = 'category_delete_order'
+
+    sorted_recordings = sorted(recordings,
+                               key=lambda r: (
+                                 getattr(r, 'is_protected', False),
+                                 -getattr(r, watched_attr_name, False),
+                                 getattr(r, category_attr_name, 0),
+                                 getattr(r, 'start_time')
+                                 ))
     return(sorted_recordings)
 
-# End sort_recordings_by_age
+# End sort_recordings_for_deletion
 
 
-def sort_recordings_by_category(recordings, watched_first):
+def is_playing_now(recording):
 
-    if watched_first:
-        sorted_recordings = sorted(recordings,
-                                   key=lambda r: (
-                                     getattr(r, 'is_protected', False),
-                                     -getattr(r, 'is_watched', False),
-                                     getattr(r, 'category_delete_order'),
-                                     getattr(r, 'start_time')
-                                     ))
-    else:
-        sorted_recordings = sorted(recordings,
-                                   key=lambda r: (
-                                     getattr(r, 'is_protected', False),
-                                     getattr(r, 'category_delete_order'),
-                                     getattr(r, 'start_time')
-                                     ))
-    return(sorted_recordings)
-
-# End sort_recordings_by_category
+    playing_recordings = recording.device.playing_now()
+    return(recording.filename in (r.filename for r in playing_recordings))
 
 
-def set_watched_flag(recording, settings):
+def is_recording_now(recording):
 
-    recording.is_watched = False
-
-    if recording.resume_offset == MAX_RESUME_OFFSET:
-        recording.is_watched = True
-    else:
-        series_settings = resolve_series_settings(recording, settings)
-        seconds_unwatched = (recording.record_end_time
-                             - recording.record_start_time
-                             - recording.resume_offset)
-        if (seconds_unwatched <= series_settings['watched_offset']):
-            recording.is_watched = True
-
-# End set_watched_flag
+    recording_recordings = recording.device.recording_now()
+    return(recording.filename in (r.filename for r in recording_recordings))
 
 
-def set_playing_flag(recording, playing_recordings):
+def get_device_series_with_episodes(device, settings):
 
-    if recording.filename in (r.filename for r in playing_recordings):
-        recording.is_playing = True
-    else:
-        recording.is_playing = False
+    device_series = device.all_recorded_series()
 
+    recorded_series = {}
+    for series in device_series:
+        series_settings = resolve_series_settings(series, settings)
+        series_id = series.series_id
+        series.is_protected = series_settings['protected']
+        series.watched_offset = series_settings['watched_offset']
+        series.category_delete_order = series_settings['delete_order']
+        series.rerecord_deleted = series_settings['rerecord_deleted']
+        series.max_episodes = series_settings['max_episodes']
+        series.max_age_days = series_settings['max_age_days']
+        series.min_age_days = series_settings['min_age_days'] or 0
 
-def set_recording_flag(recording, recording_recordings):
+        recorded_series[series_id] = {}
+        device_recordings = series.recorded_episodes()
+        for recording in device_recordings:
+            recording.device = device
+            recording.watched_offset = series.watched_offset
+            recording.category_delete_order = series.category_delete_order
 
-    if recording.filename in (r.filename for r in recording_recordings):
-        recording.is_recording = True
-    else:
-        recording.is_recording = False
+            seconds_unwatched = (recording.record_end_time
+                                 - recording.record_start_time
+                                 - recording.resume_offset)
+            recording.is_watched = (
+              (recording.resume_offset == MAX_RESUME_OFFSET)
+              or (seconds_unwatched <= recording.watched_offset)
+              )
+
+            if (series.rerecord_deleted == RERECORD_ALL
+                    or (series.rerecord_deleted == RERECORD_UNWATCHED
+                        and not recording.is_watched
+                        )):
+                recording.rerecord = True
+            else:
+                recording.rerecord = False
+
+            recording.is_protected = series.is_protected
+            recording.age_in_days = ((time.time() - recording.end_time)
+                                     / DAY_SECONDS
+                                     )
+            # This has the side effect of always automatically protecting
+            # recordings that are currently recording. So the exception
+            # DeleteRecordingRecordingError is redundant.
+            if ((recording.age_in_days < series.min_age_days)
+                    and (not recording.is_watched)):
+                recording.is_protected = True
+
+        series.recorded_episodes = device_recordings
+        recorded_series[series_id] = series
+
+    return(recorded_series)
+
+# End get_device_recordings
 
 
 def get_sorted_device_recordings(device, settings):
 
-    recorded_series = device.all_recorded_series()
+    recorded_series = get_device_series_with_episodes(device, settings)
 
     recordings = []
-    for series in recorded_series:
-        recordings.extend(series.recorded_episodes())
+    for series_id, series in recorded_series.items():
+        recordings.extend(series.recorded_episodes)
 
-    playing_recordings = device.playing_now()
-    recording_recordings = device.recording_now()
-
-    last_series_id = ""
-    for recording in recordings:
-        recording.device = device
-        if recording.series_id != last_series_id:
-            series_settings = resolve_series_settings(recording, settings)
-        recording.is_protected = series_settings['protected']
-        recording.category_delete_order = series_settings['delete_order']
-        set_watched_flag(recording, settings)
-        set_playing_flag(recording, playing_recordings)
-        set_recording_flag(recording, recording_recordings)
-        last_series_id = recording.series_id
-
-    if settings['global']['delete_policy'] == 'age':
-        sorted_recordings = sort_recordings_by_age(
-                              recordings,
-                              settings['global']['watched_first']
-                              )
-    elif settings['global']['delete_policy'] == 'category':
-        sorted_recordings = sort_recordings_by_category(
-                              recordings,
-                              settings['global']['watched_first']
-                              )
+    sorted_recordings = sort_recordings_for_deletion(recordings, settings)
 
     return(sorted_recordings)
 
@@ -547,27 +563,18 @@ def get_all_series_with_episodes(devices, settings):
     all_series = {}
     for device_key, device in devices.items():
 
-        device_series = device.all_recorded_series()
+        device_series = get_device_series_with_episodes(device, settings)
 
-        for series in device_series:
-            series_id = series.series_id
-            device_recordings = series.recorded_episodes()
-            for recording in device_recordings:
-                recording.device = device
+        for series_id, series in device_series.items():
             if series_id not in all_series:
-                # This series object will only have episodes from one
-                # device. The 'episodes' element will have episodes
-                # from all devices.
-                all_series[series_id] = {}
-                all_series[series_id]['series'] = series
-                all_series[series_id]['recorded_episodes'] = device_recordings
+                all_series[series_id] = series
             else:
-                for recording in device_recordings:
+                for recording in series.recorded_episodes:
                     # Make sure we filter duplicates in case duplicate
                     # detection at the device level fails for some reason.
                     if (recording not in
-                            all_series[series_id]['recorded_episodes']):
-                        all_series[series_id]['recorded_episodes'].append(
+                            all_series[series_id].recorded_episodes):
+                        all_series[series_id].recorded_episodes.append(
                           recording
                           )
         # end series loop
@@ -580,47 +587,57 @@ def get_all_series_with_episodes(devices, settings):
 
 def print_recording_list(devices, settings):
 
+    console = Console()
+
     for device_key in devices.keys():
         device = devices[device_key]
-        print_device_header(device)
+        table = Table(title=device.tag)
+        table.add_column('Recording Started', no_wrap=True)
+        table.add_column('Series Title', min_width=10)
+        table.add_column('Episode Title', min_width=10)
+        table.add_column('Category')
+        table.add_column('W')
+        table.add_column('P')
 
-        recordings = get_sorted_device_recordings(device, settings)
-
-        for recording in recordings:
-            msg = (f'{time.ctime(recording.start_time)}: '
-                   f'{recording.series_title}'
-                   )
-            if recording.is_watched:
-                msg += ' (watched)'
-            if recording.is_protected:
-                msg += ' (protected)'
-            print(msg)
+        for recording in get_sorted_device_recordings(device, settings):
+            table.add_row(time.strftime('%c',
+                                        time.localtime(recording.start_time)
+                                        ),
+                          recording.series_title,
+                          recording.episode_title,
+                          recording.category,
+                          'W' if recording.is_watched else '',
+                          'P' if recording.is_protected else ''
+                          )
+        console.print(table)
+    print(' (W=Watched, P=Protected)')
 
 # End print_recording_list
 
 
 def print_series_list(devices, settings):
 
+    console = Console()
+
     for device_key in devices.keys():
         device = devices[device_key]
-        print_device_header(device)
+        table = Table(title=device.tag, show_footer=True)
         device_total_size = 0
         device_watched_size = 0
         device_episode_count = 0
         device_watched_count = 0
 
-        recorded_series = device.all_recorded_series()
+        recorded_series = get_device_series_with_episodes(device, settings)
 
-        for series in recorded_series:
+        for series_id, series in recorded_series.items():
             series.total_size = 0
             series.watched_size = 0
             series.episode_count = 0
             series.watched_count = 0
 
-            for recording in series.recorded_episodes():
+            for recording in series.recorded_episodes:
                 series.total_size += recording.file_size
                 series.episode_count += 1
-                set_watched_flag(recording, settings)
                 if recording.is_watched:
                     series.watched_size += recording.file_size
                     series.watched_count += 1
@@ -629,73 +646,40 @@ def print_series_list(devices, settings):
             device_episode_count += series.episode_count
             device_watched_count += series.watched_count
 
-        sorted_series = sorted(recorded_series,
-                               key=lambda r: (getattr(r, 'total_size'))
-                               )
+        sorted_series = dict(sorted(recorded_series.items(),
+                             key=lambda r: (getattr(r[1], 'total_size', 0)))
+                             )
 
-        for series in sorted_series:
-            msg = (f"{series.title}: "
-                   f"Total {binarysize(series.total_size)} "
-                   f"({series.episode_count} "
-                   )
-            msg += ('episode)' if series.episode_count == 1 else 'episodes)')
-            if series.watched_size > 0:
-                msg += (f", Watched {binarysize(series.watched_size)} "
-                        f"({series.watched_count} "
-                        )
-                msg += ('episode)' if series.watched_count == 1
-                        else 'episodes)'
-                        )
-            series_settings = resolve_series_settings(series, settings)
-            if series_settings['protected']:
-                msg += ' (protected)'
-            print(msg)
-            msg = (f"{series.title}: "
-                   f"Total {binarysize(series.total_size)} "
-                   f"({series.episode_count} "
-                   )
-            msg += ('episode)' if series.episode_count == 1 else 'episodes)')
-            if series.watched_size > 0:
-                msg += (f", Watched {binarysize(series.watched_size)} "
-                        f"({series.watched_count} "
-                        )
-                msg += ('episode)' if series.watched_count == 1
-                        else 'episodes)'
-                        )
-
-        msg = (f"{device.tag} Total {binarysize(device_total_size)} "
-               f"({device_episode_count} "
-               )
-        msg += ('episode)' if device_episode_count == 1 else 'episodes)')
-        if device_watched_size > 0:
-            msg += (f", Watched {binarysize(device_watched_size)} "
-                    f"({device_watched_count} "
-                    )
-            msg += ('episode)' if device_watched_count == 1 else 'episodes)')
-        print(msg)
+        table.add_column('Series Title', device.tag, min_width=10)
+        table.add_column('Category')
+        table.add_column('Total Size', decimalsize(device_total_size),
+                         justify='right', min_width=9, max_width=9
+                         )
+        table.add_column('Total Episodes', str(device_episode_count),
+                         justify='right', min_width=8, max_width=8
+                         )
+        table.add_column('Watched Size', decimalsize(device_watched_size),
+                         justify='right', min_width=9, max_width=9
+                         )
+        table.add_column('Watched Episodes', str(device_watched_count),
+                         justify='right', min_width=8, max_width=8
+                         )
+        table.add_column('P')
+        for series_id, series in sorted_series.items():
+            table.add_row(series.title, series.category,
+                          decimalsize(series.total_size),
+                          str(series.episode_count),
+                          decimalsize(series.watched_size),
+                          str(series.watched_count),
+                          'P' if series.is_protected else ''
+                          )
+        console.print(table)
+    print(' (P=Protected)')
 
 # End print_series_list
 
 
-def print_device_header(device):
-
-    bumper_char = '#'
-    header_width = 78
-    tag_width = len(device.tag) + 2
-    left_bumper_width = math.floor((header_width - tag_width) / 2)
-    right_bumper_width = header_width - left_bumper_width - tag_width
-
-    for i in range(1, left_bumper_width):
-        print(bumper_char, end='')
-    print(f' {device.tag} ', end='')
-    for i in range(1, right_bumper_width):
-        print(bumper_char, end='')
-    print()
-
-# End print_device_header
-
-
-def print_device_space_report(device, settings):
+def print_device_space_report(device):
 
     used_space = device.total_space - device.free_space
     if device.free_space == 0:
@@ -705,14 +689,14 @@ def print_device_space_report(device, settings):
         free_pct = (device.free_space / device.total_space) * 100
         used_pct = (used_space / device.total_space) * 100
 
-    msg = (f'{device.tag} Total: {binarysize(device.total_space)}; '
-           f'Used: {binarysize(used_space)} ({used_pct:.1f}%); '
-           f'Free: {binarysize(device.free_space)} ({free_pct:.1f}%)'
+    msg = (f'{device.tag} Total: {decimalsize(device.total_space)}; '
+           f'Used: {decimalsize(used_space)} ({used_pct:.1f}%); '
+           f'Free: {decimalsize(device.free_space)} ({free_pct:.1f}%)'
            )
-    if (device.min_free_space > 0 and
-            device.min_free_space < device.total_space):
+    if (device.min_free_space > 0
+            and device.min_free_space < device.total_space):
         min_free_pct = (device.min_free_space / device.total_space) * 100
-        msg += (f'; Minimum Free: {binarysize(device.min_free_space)} '
+        msg += (f'; Minimum Free: {decimalsize(device.min_free_space)} '
                 f'({min_free_pct:.1f}%)'
                 )
     logger.info(msg)
@@ -720,118 +704,98 @@ def print_device_space_report(device, settings):
 # End print_device_space_report
 
 
-def delete_recording(recording, settings, reason=''):
+def delete_recording(recording, reason=''):
 
-    series_settings = resolve_series_settings(recording, settings)
+    episode_description = f'"{recording.series_title}'
+    if len(recording.episode_title) > 0:
+        episode_description += f': {recording.episode_title}'
+    episode_description += f'", recorded {time.ctime(recording.start_time)},'
 
-    logger.info(f'{recording.device.tag} '
-                f'Deleting "{recording.series_title}" recorded '
-                f'{time.ctime(recording.start_time)} {reason}')
-
-    if series_settings['protected']:
+    if recording.is_protected:
+        logger.debug(f"{recording.device.tag} Skipped deletion of "
+                     f"{episode_description} because it's protected"
+                     )
         raise DeleteProtectedRecordingError()
-    if not hasattr(recording, 'is_playing'):
-        playing_recordings = recording.device.playing_now()
-        set_playing_flag(recording, playing_recordings)
-    if recording.is_playing:
+    if is_playing_now(recording):
+        logger.debug(f"{recording.device.tag} Skipped deletion of "
+                     f"{episode_description} because it's playing right now"
+                     )
         raise DeletePlayingRecordingError()
-    if not hasattr(recording, 'is_recording'):
-        recording_recordings = recording.device.recording_now()
-        set_recording_flag(recording, recording_recordings)
-    if recording.is_recording:
-        raise DeleteRecordingRecordingError()
+
+    msg = f'{recording.device.tag} Deleting '
+    if (recording.rerecord):
+        msg += '(will re-record) '
+    msg += f'{episode_description} {reason}'
+    logger.info(msg)
+
     if dry_run:
         return()
 
-    recording.delete(series_settings['rerecord_deleted'])
+    recording.delete(recording.rerecord)
 
 # End delete_recording
 
 
-def delete_aged_recordings(recordings, settings):
+def delete_aged_recordings(recordings, max_age_days):
 
-    # Assumption: all recordings passed in are of the same series
-    series_settings = resolve_series_settings(recordings[0], settings)
-    max_age_days = series_settings['max_age_days']
-    min_end_time = (time.time() - (max_age_days * DAY_SECONDS))
+    # Assumptions:
+    # - Recordings are all of the same series (so have the same max age)
+    # - Recordings are sorted by age, oldest to newest
+
+    if max_age_days is None:
+        return(recordings)
 
     pruned_recordings = recordings.copy()
     for recording in recordings:
-        if recording.end_time < min_end_time:
-            try:
-                delete_recording(recording, settings,
-                                 reason=(
-                                   "because it's older than "
-                                   f'{duration(max_age_days*DAY_SECONDS)}'
-                                   ))
-                pruned_recordings.remove(recording)
-            except DeletePlayingRecordingError:
-                logger.warning(
-                  f'Failed to delete "{recording.series_title}" '
-                  f'recorded {time.ctime(recording.start_time)} '
-                  "because it's playing right now"
-                  )
-                continue
-            except Exception as e:
-                logger.error(e)
-                continue
-            # No need to catch DeleteProtectedRecordingError since
-            # this function is not called if the series is protected.
-            # No need to catch DeleteRecordingRecordingError since
-            # min value for max_age_days is '1', and we have to be
-            # past the end time of the recording for its age to be
-            # positive.
-    # End for
+        if recording.age_in_days <= max_age_days:
+            break
+        try:
+            delete_recording(recording,
+                             reason=(f"because it's older than {max_age_days} "
+                                     "days"
+                                     ))
+            pruned_recordings.remove(recording)
+        except DeleteProtectedRecordingError:
+            continue
+        except DeletePlayingRecordingError:
+            continue
+        except Exception as e:
+            logger.error(e)
+            continue
 
     return(pruned_recordings)
 
 # End delete_aged_recordings
 
 
-def delete_excess_recordings(recordings, settings):
+def delete_excess_recordings(recordings, max_episodes):
 
-    max_episodes = 99999
+    # Assumptions:
+    # - Recordings are all of the same series (so have the same max epidodes)
+    # - Recordings are sorted by age, oldest to newest
 
-    watched_first = settings['global']['watched_first']
-    # Assumption: all recordings passed in are of the same series
-    series_settings = resolve_series_settings(recordings[0], settings)
-    max_episodes = series_settings['max_episodes']
+    if max_episodes is None:
+        return recordings
 
-    if len(recordings) <= max_episodes:
-        return(recordings)
-
-    for recording in recordings:
-        set_watched_flag(recording, settings)
-    sorted_recordings = sort_recordings_by_age(recordings, watched_first)
     pruned_recordings = recordings.copy()
-
-    for recording in sorted_recordings:
+    for recording in recordings:
         if len(pruned_recordings) <= max_episodes:
             break
         try:
-            delete_recording(recording, settings,
+            delete_recording(recording,
                              reason=('because there are '
-                                     f'{len(pruned_recordings)} recorded '
-                                     f'episodes (maximum is {max_episodes})'
+                                     f'{len(pruned_recordings)} '
+                                     'recorded episodes '
+                                     f'(maximum is {max_episodes})'
                                      ))
             pruned_recordings.remove(recording)
-        except DeletePlayingRecordingError:
-            logger.warning(f'Failed to delete "{recording.series_title}" '
-                           f'recorded {time.ctime(recording.start_time)} '
-                           "because it's playing right now"
-                           )
+        except DeleteProtectedRecordingError:
             continue
-        except DeleteRecordingRecordingError:
-            logger.warning(f'Failed to delete "{recording.series_title}" '
-                           f'recorded {time.ctime(recording.start_time)} '
-                           "because it's recording right now"
-                           )
+        except DeletePlayingRecordingError:
             continue
         except Exception as e:
             logger.error(e)
             continue
-        # No need to catch DeleteProtectedRecordingError since
-        # this function is not called if the series is protected.
 
     return(pruned_recordings)
 
@@ -841,25 +805,15 @@ def delete_excess_recordings(recordings, settings):
 def delete_spacious_recording(device, settings):
 
     sorted_recordings = get_sorted_device_recordings(device, settings)
-    # Because sorting is done on "is_protected" first, if the
-    # first recording is protected, then all remaining recordings
-    # are protected.
+
+    # Because sorting is done on "is_protected" first, once a protected
+    # recording is encountered, then all remaining recordings are protected.
     while sorted_recordings and not sorted_recordings[0].is_protected:
         recording = sorted_recordings.pop(0)
         try:
-            delete_recording(recording, settings, reason='to free space')
+            delete_recording(recording, reason='to free space')
             break
         except DeletePlayingRecordingError:
-            logger.warning(f'Failed to delete "{recording.series_title}" '
-                           f'recorded {time.ctime(recording.start_time)} '
-                           "because it's playing right now"
-                           )
-            continue
-        except DeleteRecordingRecordingError:
-            logger.warning(f'Failed to delete "{recording.series_title}" '
-                           f'recorded {time.ctime(recording.start_time)} '
-                           "because it's recording right now"
-                           )
             continue
         except Exception as e:
             logger.error(e)
@@ -867,96 +821,124 @@ def delete_spacious_recording(device, settings):
             # is
             pass
     else:
-        logger.warning(f'{device.tag} No deletable recordings '
-                       'found. Unable to free space.')
+        logger.warning(f'{device.tag} No deletable recordings found. Unable '
+                       'to free space.'
+                       )
 
 # End delete_spacious_recording
 
 
-def report_device_space(device, settings):
-
-    device.space_report_count += 1
-
-    device_settings = settings[f'device:{device.key}']
-    report_limit = device_settings['count']
+def report_device_space(device):
 
     try:
-        if report_limit is None or device.space_report_count <= report_limit:
-            if device.space_report_count == 1:
-                msg = (f'{device.tag} Disk space utilization will be reported '
-                       f"every {duration(device_settings['interval'])}"
-                       )
-                if report_limit is not None:
-                    msg += f", stopping after {report_limit} "
-                    msg += 'report' if report_limit == 1 else 'reports'
-                logger.debug(msg)
+        if (device.space_report_limit is None
+                or device.space_report_count < device.space_report_limit):
             device.refresh()
-            print_device_space_report(device, settings)
+            print_device_space_report(device)
+            device.space_report_count += 1
     except ConnectionError as e:
-        logger.error(f'{device.tag} Device is not responding: {e}')
+        logger.warning(f'{device.tag} Device is not responding: {e}')
         return()
 
 # End report_device_space
 
 
-def set_min_free_space(devices, settings):
+def update_device_settings(device, settings):
 
-    for device_key, device in devices.items():
-        if device.total_space is None:
-            continue
-        min_free_space = 0
-        device_settings = settings[f'device:{device.key}']
-        if device_settings['percent_free'] is not None:
-            min_free_space = (device.total_space
-                              * (device_settings['percent_free'] / 100)
-                              )
-        elif device_settings['gigabytes_free'] is not None:
-            min_free_space = (device_settings['gigabytes_free']
-                              * BYTES_PER_GB
-                              )
-        device.min_free_space = min_free_space
+    if device is None:
+        return
+    if f'device:{device.key}' not in settings:
+        return
 
-# End set_min_free_space
+    old_min_free_space = device.min_free_space
+    old_global_delete_policy = device.global_delete_policy
+    old_global_watched_first = device.global_watched_first
+    old_space_report_interval = device.space_report_interval
+    old_space_report_limit = device.space_report_limit
+
+    device_settings = settings[f'device:{device.key}']
+    device.space_report_interval = device_settings["interval"]
+    device.space_report_limit = device_settings["count"]
+    device.min_percent_free = device_settings['percent_free']
+    device.min_gigabytes_free = device_settings['gigabytes_free']
+    device.global_delete_policy = settings['global']['delete_policy']
+    device.global_watched_first = settings['global']['watched_first']
+
+    if device.total_space is None:
+        device.space_report_limit = 0
+    elif ((device.space_report_interval != old_space_report_interval)
+            or (device.space_report_limit != old_space_report_limit)):
+        msg = (f'{device.tag} Disk space utilization will be reported every '
+               f'{duration(device.space_report_interval)}'
+               )
+        if device.space_report_limit is not None:
+            msg += f' and will stop after {device.space_report_limit} '
+            msg += 'report' if device.space_report_limit == 1 else 'reports'
+        logger.debug(msg)
+
+    if device.total_space is None:
+        device.min_free_space = 0
+    elif device.min_percent_free is not None:
+        device.min_free_space = (device.total_space
+                                 * (device.min_percent_free / 100)
+                                 )
+        threshold_str = f'{device.min_percent_free:.1f}%'
+    elif device.min_gigabytes_free is not None:
+        device.min_free_space = (device.min_gigabytes_free * BYTES_PER_GB)
+        threshold_str = decimalsize(device.min_free_space)
+    else:
+        device.min_free_space = 0
+
+    if device.min_free_space <= 0:
+        if old_min_free_space > 0:
+            logger.debug(f'{device.tag} Discontinuing free space maintenance')
+        device.maintenance_due_time = INFINITE_FUTURE
+    elif device.min_free_space <= device.total_space:
+        if device.min_free_space != old_min_free_space:
+            device.maintenance_due_time = time.time()
+        # else continue existing cadence
+        if (device.min_free_space != old_min_free_space
+                or device.global_delete_policy != old_global_delete_policy
+                or device.global_watched_first != old_global_watched_first):
+            msg = (f'{device.tag} A minimum of {threshold_str} free space '
+                   'will be maintained. Recordings will be deleted according '
+                   f'to {device.global_delete_policy} '
+                   )
+            if device.global_watched_first:
+                msg += '(watched recordings will be deleted first) '
+            msg += 'to maintain minimum free space.'
+            logger.debug(msg)
+    elif device.min_free_space > device.total_space:
+        if device.min_free_space != old_min_free_space:
+            logger.error(f'{device.tag} Minimum free space '
+                         f'({decimalsize(device.min_free_space)}) '
+                         'cannot be greater than device total space '
+                         f'({decimalsize(device.total_space)})'
+                         )
+            device.maintenance_due_time = INFINITE_FUTURE
+
+# End update_device_settings
 
 
 def maintain_device(device, settings):
 
-    device.maintenance_count += 1
-
-    device_settings = settings[f'device:{device.key}']
     if device.min_free_space == 0:
         return()
 
-    if device.maintenance_count == 1:
-        if device_settings['percent_free'] is not None:
-            threshold_str = f"{device_settings['percent_free']:.1f}%"
-        elif device_settings['gigabytes_free'] is not None:
-            threshold_str = binarysize(device.min_free_space)
-
-        msg = (f'{device.tag} Recordings will be deleted according to '
-               f"{settings['global']['delete_policy']} to maintain "
-               f'minimum free space of {threshold_str}.'
-               )
-        if settings['global']['watched_first']:
-            msg += ' Watched recordings will be deleted first.'
-        logger.debug(msg)
-
     try:
         device.refresh()
-        logger.debug(f'{device.tag} Running maintenance cycle - '
-                     'checking free space'
-                     )
+        logger.debug(f'{device.tag} Running free space maintenance cycle')
         if device.free_space < device.min_free_space:
-            print_device_space_report(device, settings)
+            print_device_space_report(device)
             delete_spacious_recording(device, settings)
     except ConnectionError as e:
-        logger.error(f'{device.tag} Device is not responding: {e}')
+        logger.warning(f'{device.tag} Device is not responding: {e}')
         return()
 
 # End maintain_device
 
 
-def calc_maintenance_interval(device, settings):
+def calc_maintenance_interval(device):
 
     try:
         device.refresh()
@@ -966,15 +948,20 @@ def calc_maintenance_interval(device, settings):
             interval = MIN_SPACE_CHECK_INTERVAL
         return(interval)
     except ConnectionError as e:
-        logger.error(f'{device.tag} Device is not responding: {e}')
+        logger.warning(f'{device.tag} Device is not responding: {e}')
         return(MIN_SPACE_CHECK_INTERVAL)
 
 # End calc_maintenance_interval
 
 
-def maintain_recordings(devices, settings):
+def is_recording_maintenance_configured(settings):
 
-    # Do we need to run maintenance?
+    do_recording_maintenance = False
+    config_section_name_pattern = re.compile(
+      r'(?P<type>[^:]+)((:(?P<id>.*))|$)'
+      )
+
+    # Do we need to run recording maintenance at all?
     # Have to examine config file contents and not resolved settings because
     # category- and series-level settings have not been resolved yet.
     for section_name, config_section in settings.getConfig().items():
@@ -984,51 +971,76 @@ def maintain_recordings(devices, settings):
             if 'max_episodes' in config_section:
                 if (config_section['max_episodes'] is not None
                         and config_section['max_episodes'] != ''):
+                    do_recording_maintenance = True
                     break
             if 'max_age_days' in config_section:
                 if (config_section['max_age_days'] is not None
                         and config_section['max_age_days'] != ''):
+                    do_recording_maintenance = True
                     break
-    else:
-        return
+    return(do_recording_maintenance)
+
+# End is_recording_maintenance_configured
+
+
+def maintain_recordings(devices, settings):
 
     try:
         all_series = get_all_series_with_episodes(devices, settings)
-        for series_id in all_series.keys():
-            series = all_series[series_id]['series']
-            series_settings = resolve_series_settings(series, settings)
-            if series_settings['protected']:
+        logger.debug('Running recording maintenance cycle')
+        for series_id, series in all_series.items():
+            if series.is_protected:
                 continue
 
-            recordings = all_series[series_id]['recorded_episodes']
-            if (series_settings['max_age_days'] is not None and
-                    len(recordings) > 0):
-                remaining_recordings = delete_aged_recordings(
-                                         recordings, settings
-                                         )
-                recordings = remaining_recordings
-            if (series_settings['max_episodes'] is not None and
-                    len(recordings) > 0):
-                remaining_recordings = delete_excess_recordings(
-                                         recordings, settings
-                                         )
-                recordings = remaining_recordings
+            recordings = sort_recordings_for_deletion(series.recorded_episodes,
+                                                      settings
+                                                      )
+            remaining_recordings = delete_aged_recordings(recordings,
+                                                          series.max_age_days
+                                                          )
+            recordings = remaining_recordings
+            remaining_recordings = delete_excess_recordings(recordings,
+                                                            series.max_episodes
+                                                            )
+            recordings = remaining_recordings
     except ConnectionError as e:
-        logger.error(f'Device is not responding: {e}')
+        logger.warning(f'Device is not responding: {e}')
         return()
 
 # End maintain_recordings
+
+
+def is_conf_file_updated(conf_file_path, settings):
+
+    conf_file_is_updated = False
+
+    try:
+        new_mtime = os.path.getmtime(conf_file_path)
+        if new_mtime > settings['timestamp']:
+            if settings['timestamp'] != 0:
+                logger.debug(f'{conf_file_path} has been updated')
+            conf_file_is_updated = True
+    except FileNotFoundError:
+        # If the file gets removed after start-up, it's OK
+        pass
+
+    return(conf_file_is_updated)
+
+# End is_conf_file_updated
 
 
 def main():
 
     global logger
     global dry_run
-    global args
+
     conf_file_path = None
+    conf_file_check_due_time = INFINITE_FUTURE
     devices = {}
     device_discovery_due_time = time.time()
-    recording_maintenance_due_time = time.time()
+    recording_maintenance_due_time = INFINITE_FUTURE
+    settings = {'timestamp': 0}
+    refresh_settings = True
 
     try:
         args = parse_args(sys.argv[1:])
@@ -1044,19 +1056,42 @@ def main():
             logger.warning('This is a dry-run. No recordings will be deleted, '
                            'even if log messages indicate otherwise.'
                            )
-
         if args.conf_file is not None:
             conf_file_path = args.conf_file.name
-            conf_file_mtime = os.path.getmtime(conf_file_path)
-        settings = Settings(args, conf_file_path)
+            conf_file_check_due_time = time.time()
 
         while True:
 
             # Discover devices
             if device_discovery_due_time <= time.time():
                 devices = get_monitored_devices(args.device_id_list, devices)
-                set_min_free_space(devices, settings)
+                for device_key, device in devices.items():
+                    update_device_settings(device, settings)
                 device_discovery_due_time += DEVICE_DISCOVERY_INTERVAL
+
+            # Monitor config file for changes
+            if conf_file_check_due_time <= time.time():
+                refresh_settings = is_conf_file_updated(conf_file_path,
+                                                        settings
+                                                        )
+                conf_file_check_due_time += CONFIG_FILE_CHECK_INTERVAL
+
+            if refresh_settings:
+                refresh_settings = False
+                settings = Settings(args, conf_file_path)
+                settings['timestamp'] = time.time()
+
+                for device_key, device in devices.items():
+                    update_device_settings(device, settings)
+
+                if is_recording_maintenance_configured(settings):
+                    if recording_maintenance_due_time >= INFINITE_FUTURE:
+                        recording_maintenance_due_time = time.time()
+                    # else continue on existing cadence
+                else:
+                    if recording_maintenance_due_time < INFINITE_FUTURE:
+                        logger.debug('Discontinuing recording maintenance')
+                    recording_maintenance_due_time = INFINITE_FUTURE
 
             # List recordings/series (one and done)
             if args.list_recordings or args.list_series:
@@ -1068,75 +1103,36 @@ def main():
 
             # Report device space utilization
             for device_key, device in devices.items():
-                if device.space_report_due_time <= time.time():
-                    device.refresh()
-                    if device.total_space is None:
-                        logger.warning(f'{device.tag} Device does not report '
-                                       'disk space utilization figures, so '
-                                       'space utilization reports cannot be '
-                                       'printed'
-                                       )
-                        device.space_report_due_time = INFINITE_FUTURE
-                        continue
-                    report_device_space(device, settings)
-                    device_settings = settings[f'device:{device_key}']
-                    device.space_report_due_time += device_settings['interval']
+                # This "due time" is handled differently than the others so it
+                # can be reactive to report interval configuration changes
+                if ((device.prior_space_report_time
+                        + device.space_report_interval) > time.time()):
+                    continue
+                device.prior_space_report_time = math.floor(time.time())
+                report_device_space(device)
 
             # Maintain device free space
             for device_key, device in devices.items():
-                if device.maintenance_due_time <= time.time():
-                    device.refresh()
-                    if device.total_space is None:
-                        logger.warning(f'{device.tag} Device does not report '
-                                       'disk space utilization figures, so '
-                                       'recordings will not be deleted to '
-                                       'maintain free space'
-                                       )
-                        device.maintenance_due_time = INFINITE_FUTURE
-                        continue
-                    if device.min_free_space > device.total_space:
-                        logger.error(f'{device.tag} Minimum free space '
-                                     f'({binarysize(device.min_free_space)}) '
-                                     'cannot be greater than device total '
-                                     'space '
-                                     f'({binarysize(device.total_space)})'
-                                     )
-                        device.maintenance_due_time = INFINITE_FUTURE
-                        continue
-                    if device.min_free_space == 0:
-                        continue
-                    maintain_device(device, settings)
-                    maintenance_interval = calc_maintenance_interval(
-                                             device, settings
-                                             )
-                    device.maintenance_due_time += maintenance_interval
-                    logger.debug(f'{device.tag} Next maintenance cycle in '
-                                 f'{duration(maintenance_interval)}'
-                                 )
+                if device.maintenance_due_time > time.time():
+                    continue
+                maintain_device(device, settings)
+                maintenance_interval = calc_maintenance_interval(device)
+                device.maintenance_due_time += maintenance_interval
+                logger.debug(f'{device.tag} Next free space maintenance cycle '
+                             f'in {duration(maintenance_interval)}'
+                             )
 
             # Maintain recordings
             if recording_maintenance_due_time <= time.time():
                 maintain_recordings(devices, settings)
                 recording_maintenance_due_time += RECORDING_MAINT_INTERVAL
+                logger.debug(f'Next recording maintenance cycle in '
+                             f'{duration(RECORDING_MAINT_INTERVAL)}'
+                             )
 
             # Quit if just testing
             if args.test_mode:
                 break
-
-            # Monitor config file for changes
-            if conf_file_path is not None:
-                try:
-                    new_mtime = os.path.getmtime(conf_file_path)
-                    if new_mtime > conf_file_mtime:
-                        logger.debug('Configuration file has been '
-                                     'updated. Reading new settings.'
-                                     )
-                        settings = Settings(args, conf_file_path)
-                        set_min_free_space(devices, settings)
-                        conf_file_mtime = new_mtime
-                except FileNotFoundError:
-                    # If the file gets removed after start-up, it's OK
-                    pass
 
             time.sleep(0.1)
 
@@ -1148,6 +1144,12 @@ def main():
         sys.exit()
     except BrokenPipeError:
         sys.exit()
+    except OSError as e:
+        logger.error(f'Unexpected error. Will restart in {RESTART_DELAY} '
+                     f'seconds: {e}'
+                     )
+        time.sleep(RESTART_DELAY)
+        os.execl(sys.executable, sys.executable, *sys.argv)
 
 # End main()
 
