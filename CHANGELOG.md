@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 - Web UI to maintain configuration
 
+## [2.3.0] - 2025-04
+
+### Added
+- The `-d/--device-id` argument now supports devices on a different subnet, which cannot be found via discovery.
+
+### Changed
+- When monitoring and reporting space usage, a report is only written if the amount of space used has changed since the last report.
+
+### Fixed
+- Aged recordings could be deleted later than they should be
+
 ## [2.2.0] - 2022-01-01
 
 ### Added

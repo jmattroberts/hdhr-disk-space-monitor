@@ -64,6 +64,7 @@ from .settings import percent
 from .settings import watched_offset
 from .util import decimalsize, duration
 from .hdhr.devices import Devices
+from .hdhr.devices import StorageServer
 from .hdhr.recordings import RecordedSeries
 from .hdhr.recordings import Recording
 from .hdhr.recordings import MAX_RESUME_OFFSET
@@ -159,10 +160,10 @@ def parse_args(argv):
 
     parser.add_argument(
       '-d', '--device-id', action='extend', nargs='+', type=str,
-      dest='device_id_list', metavar='DEVICE_ID|IP|HOSTNAME',
+      dest='device_id_list', metavar='DEVICE_ID|IP[:PORT]|HOSTNAME[:PORT]',
       help='ID, IP address, or hostname of device(s) to monitor. Default is '
       f'"{DEFAULT_DEVICE_ID}" which discovers all storage devices on '
-      'the local network.'
+      'the local network. If PORT is not specified, defaults to 80.'
       )
 
     parser.add_argument(
@@ -322,6 +323,7 @@ def get_monitored_devices(desired_device_id_list, devices):
 
     friendly_name_pattern = re.compile(r'HDHomeRun (?P<short_name>.*)')
     model_number_pattern = re.compile(r'(?P<family>[A-Z]{4})-(?P<version>.*)')
+    host_port_pattern = re.compile(r'(?P<hostname>[^:]+)[:]{0,1}(?P<port>.*)')
 
     current_devices = devices
     discovered_devices = {}
@@ -349,10 +351,28 @@ def get_monitored_devices(desired_device_id_list, devices):
             device = available_devices.get_storage_by_id(device_id)
             if device is None:
                 try:
-                    ip_addr = socket.gethostbyname(device_id)
+                    m = host_port_pattern.match(device_id)
+                    hostname = m.group('hostname')
+                    port = m.group('port')
+                    if port == '':
+                        port = 80
+                    ip_addr = socket.gethostbyname(hostname)
                     device = available_devices.get_storage_by_ip(ip_addr)
-                except socket.gaierror:
+                except socket.gaierror as e:
+                    logger.warning(f'Address lookup error: {e}')
                     pass
+                else:
+                    if device is None:
+                        try:
+                            # One last attempt in case we're given an ip/hostname
+                            # from a different subnet, making the device
+                            # undiscoverable.
+                            device = StorageServer([ip_addr,0])
+                            device._base_url = f'http://{hostname}:{port}'
+                            device.refresh()
+                        except ConnectionError as e:
+                            logger.warning(f'Device is not responding: {e}')
+                            pass
         if device is None:
             logger.error(f'Device not found: {device_id} (non-storage devices '
                          'are ignored)'
@@ -426,6 +446,7 @@ def get_monitored_devices(desired_device_id_list, devices):
 
         # Defaults
         device.min_free_space = 0
+        device.last_reported_free_space = -1
         device.space_report_count = 0
         device.maintenance_due_time = INFINITE_FUTURE
         device.prior_space_report_time = 0
@@ -447,6 +468,17 @@ def get_monitored_devices(desired_device_id_list, devices):
     return(devices)
 
 # End get_monitored_devices
+
+
+def sort_recordings_by_age(recordings, settings):
+
+    sorted_recordings = sorted(recordings,
+                               key=lambda r: (
+                                 getattr(r, 'start_time')
+                                 ))
+    return(sorted_recordings)
+
+# End sort_recordings_by_age
 
 
 def sort_recordings_for_deletion(recordings, settings):
@@ -771,8 +803,8 @@ def delete_aged_recordings(recordings, max_age_days):
 def delete_excess_recordings(recordings, max_episodes):
 
     # Assumptions:
-    # - Recordings are all of the same series (so have the same max epidodes)
-    # - Recordings are sorted by age, oldest to newest
+    # - Recordings are all of the same series (so have the same max episodes)
+    # - Recordings are sorted by deletion preference
 
     if max_episodes is None:
         return recordings
@@ -834,8 +866,10 @@ def report_device_space(device):
         if (device.space_report_limit is None
                 or device.space_report_count < device.space_report_limit):
             device.refresh()
-            print_device_space_report(device)
-            device.space_report_count += 1
+            if decimalsize(device.free_space) != decimalsize(device.last_reported_free_space):
+                print_device_space_report(device)
+                device.space_report_count += 1
+                device.last_reported_free_space = device.free_space
     except ConnectionError as e:
         logger.warning(f'{device.tag} Device is not responding: {e}')
         return()
@@ -992,13 +1026,15 @@ def maintain_recordings(devices, settings):
             if series.is_protected:
                 continue
 
-            recordings = sort_recordings_for_deletion(series.recorded_episodes,
-                                                      settings
-                                                      )
+            recordings = sort_recordings_by_age(series.recorded_episodes,
+                                                settings
+                                                )
             remaining_recordings = delete_aged_recordings(recordings,
                                                           series.max_age_days
                                                           )
-            recordings = remaining_recordings
+            recordings = sort_recordings_for_deletion(remaining_recordings,
+                                                      settings
+                                                      )
             remaining_recordings = delete_excess_recordings(recordings,
                                                             series.max_episodes
                                                             )

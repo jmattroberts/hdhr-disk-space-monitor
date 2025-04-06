@@ -319,18 +319,21 @@ class Device():
     _discover_uri = 'discover.json'
     _status_uri = 'status.json'
 
-    # Only pull elements from the JSON that aren't part of the initial
-    # discovery, or that can change. LineupURL might not be needed here.
-    # Not sure.
     _json_attr_str_map = {'FriendlyName': '_friendly_name',
                           'ModelNumber': '_model_number',
                           'FirmwareName': '_firmware_name',
                           'FirmwareVersion': '_firmware_version',
                           'DeviceAuth': '_device_auth_string',
+                          'DeviceID': '_id',
+                          'BaseURL': '_base_url',
+                          'LineupURL': '_lineup_url',
+                          'StorageID': '_storage_id',
+                          'StorageURL': '_storage_url',
                           'Version': '_version'
                           }
     _json_attr_int_map = {'TotalSpace': '_total_space',
-                          'FreeSpace': '_free_space'
+                          'FreeSpace': '_free_space',
+                          'TunerCount': '_tuner_count'
                           }
 
     def __init__(self, address):
@@ -406,7 +409,10 @@ class Device():
             if hasattr(self, attr):
                 delattr(self, attr)
             if key in json:
-                setattr(self, attr, json[key])
+                if attr == '_id':
+                    setattr(self, attr, int(f'0x{json[key]}', 16))
+                else:
+                    setattr(self, attr, json[key])
         for key, attr in self._json_attr_int_map.items():
             if hasattr(self, attr):
                 delattr(self, attr)
